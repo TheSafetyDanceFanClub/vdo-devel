@@ -1,0 +1,66 @@
+name: Start testing
+on:
+  issue_comment:
+    types: [created, edited]
+
+jobs:
+  job01:
+    if: contains(github.event.comment.html_url, '/pull/')    # check if the comments come from pull request, exclude those from issue.
+    runs-on: self-hosted
+    steps:
+    - name: Remove public-testing untested
+      uses: andymckay/labeler@e6c4322d0397f3240f0e7e30a33b5c5df2d39e90
+      with:
+        remove-labels: "public-testing-untested"
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Post Testing Comment started
+      uses: peter-evans/create-or-update-comment@v2
+      with:
+        issue-number: ${{ github.event.issue.number }}
+        body: |
+          Testing is starting
+
+    - name: Add public-testing running
+      if: contains(github.event.comment.body, 'ok-to-test')   # check the comment if it contains the keywords
+      uses: andymckay/labeler@e6c4322d0397f3240f0e7e30a33b5c5df2d39e90
+      with:
+        add-labels: "public-testing-running"
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: say hello
+      if: contains(github.event.comment.body, 'ok-to-test')   # check the comment if it contains the keywords
+      id: testing
+      run: |
+        echo say hello to failure
+        false
+        exit 1
+
+    - name: Post Testing Comment finished
+      uses: peter-evans/create-or-update-comment@v2
+      if: always()
+      with:
+        issue-number: ${{ github.event.issue.number }}
+        body: |
+          Testing has finished
+
+    - name: Remove public-testing running
+      if: always()
+      uses: andymckay/labeler@e6c4322d0397f3240f0e7e30a33b5c5df2d39e90
+      with:
+        remove-labels: "public-testing-running"
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Add public-testing failed
+      if: failure() && contains(github.event.comment.body, 'ok-to-test')   # check the comment if it contains the keywords
+      uses: andymckay/labeler@e6c4322d0397f3240f0e7e30a33b5c5df2d39e90
+      with:
+        add-labels: "public-testing-failed"
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Add public-testing passed
+      if: success() && contains(github.event.comment.body, 'ok-to-test')   # check the comment if it contains the keywords
+      uses: andymckay/labeler@e6c4322d0397f3240f0e7e30a33b5c5df2d39e90
+      with:
+        add-labels: "public-testing-passed"
+        repo-token: ${{ secrets.GITHUB_TOKEN }}

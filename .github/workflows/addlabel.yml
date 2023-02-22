@@ -1,0 +1,16 @@
+name: Add untested label
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  add_label:
+    runs-on: self-hosted
+    name: Add Untested label
+    steps:
+      - name: addlabel
+        uses: buildsville/add-remove-label@v1
+        with:
+          token: ${{secrets.GITHUB_TOKEN}}
+          label: public-testing-untested
+          type: add
