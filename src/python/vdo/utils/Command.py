@@ -250,6 +250,7 @@ class Command(object):
       error = e._stderr.split(os.linesep)[0]
       if error:
         e.setMessage(error)
+        e.setMessage(error)
       raise e
 
   ######################################################################
