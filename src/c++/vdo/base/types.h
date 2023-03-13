@@ -3,8 +3,8 @@
  * Copyright Red Hat
  */
 
-#ifndef TYPES_H
-#define TYPES_H
+#ifndef VDO_TYPES_H
+#define VDO_TYPES_H
 
 #if defined(__KERNEL__) || defined(INTERNAL)
 #include <linux/bio.h>
@@ -268,8 +268,6 @@ enum vdo_completion_type {
 	VDO_READ_ONLY_MODE_COMPLETION,
 	VDO_READ_ONLY_REBUILD_COMPLETION,
 	VDO_RECOVERY_COMPLETION,
-	VDO_SLAB_SCRUBBER_COMPLETION,
-	VDO_SUB_TASK_COMPLETION,
 	VDO_SYNC_COMPLETION,
 	VIO_COMPLETION,
 #ifndef __KERNEL__
@@ -435,4 +433,4 @@ struct vio {
 };
 #endif /* __KERNEL__ or INTERNAL */
 
-#endif /* TYPES_H */
+#endif /* VDO_TYPES_H */

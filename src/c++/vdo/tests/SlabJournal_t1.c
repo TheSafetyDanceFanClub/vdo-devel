@@ -14,13 +14,13 @@
 #include "permassert.h"
 
 #include "admin-state.h"
+#include "encodings.h"
 #include "int-map.h"
 #include "ref-counts.h"
-#include "slab.h"
 #include "slab-depot.h"
 #include "slab-journal.h"
+#include "slab.h"
 #include "vdo.h"
-#include "vdo-component-states.h"
 #include "vio.h"
 
 #include "adminUtils.h"
@@ -28,6 +28,7 @@
 #include "asyncVIO.h"
 #include "blockAllocatorUtils.h"
 #include "callbackWrappingUtils.h"
+#include "completionUtils.h"
 #include "intIntMap.h"
 #include "latchedCloseUtils.h"
 #include "latchUtils.h"
@@ -300,13 +301,13 @@ static void resetWrapper(DataVIOWrapper *wrapper, EntryNumber entry)
 
   struct data_vio *dataVIO = &wrapper->dataVIO;
   vdo_prepare_completion(&dataVIO->vio.completion,
-                         vdo_finish_completion_parent_callback,
-                         vdo_finish_completion_parent_callback,
+                         finishParentCallback,
+                         finishParentCallback,
                          0,
                          &wrapper->completion);
   vdo_prepare_completion(&dataVIO->decrement_completion,
-                         vdo_finish_completion_parent_callback,
-                         vdo_finish_completion_parent_callback,
+                         finishParentCallback,
+                         finishParentCallback,
                          0,
                          &wrapper->completion);
 
@@ -1519,8 +1520,12 @@ static bool journalIsClosed(void *context)
  **/
 static void closeJournalWrapper(void *context, struct vdo_completion *parent)
 {
-  vdo_start_slab_action(((struct slab_journal *) context)->slab,
-                        VDO_ADMIN_STATE_SAVING, parent);
+  struct slab_journal *journal = context;
+
+  vdo_start_operation_with_waiter(&journal->slab->state,
+                                  VDO_ADMIN_STATE_SAVING,
+                                  parent,
+                                  initiate_slab_action);
 }
 
 /**

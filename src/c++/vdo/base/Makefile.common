@@ -11,15 +11,14 @@ BASE_OBJS :=     			\
 	action-manager.o     		\
 	admin-state.o			\
 	block-map.o			\
-	block-map-recovery.o		\
 	completion.o			\
 	constants.o			\
 	data-vio.o			\
         dedupe.o                        \
         dm-vdo-target.o                 \
+	encodings.o			\
 	flush.o				\
 	heap.o				\
-	instance-number.o		\
 	int-map.o			\
 	io-submitter.o			\
 	logical-zone.o			\
@@ -29,21 +28,16 @@ BASE_OBJS :=     			\
 	pool-sysfs.o			\
 	pool-sysfs-stats.o		\
 	priority-table.o		\
-	read-only-notifier.o		\
+	recovery.o			\
 	recovery-journal.o		\
 	ref-counts.o			\
 	slab.o				\
 	slab-depot.o			\
 	slab-journal.o			\
-	slab-scrubber.o			\
-	slab-summary.o			\
 	status-codes.o			\
-	super-block.o			\
 	thread-config.o			\
 	vdo.o				\
-	vdo-component-states.o  	\
 	vdo-layout.o			\
-	vdo-recovery.o			\
 	vio.o				\
 	volume-geometry.o		\
 	wait-queue.o
@@ -58,7 +52,7 @@ KERNEL_OBJS:=                           \
 
 USER_OBJECTS:=                  	\
 	constants.o			\
+	encodings.o			\
 	status-codes.o			\
-	vdo-component-states.o		\
 	vdo-layout-user.o		\
 	volume-geometry.o

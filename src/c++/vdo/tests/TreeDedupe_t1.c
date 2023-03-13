@@ -12,8 +12,7 @@
 #include "syscalls.h"
 
 #include "block-map.h"
-#include "read-only-notifier.h"
-#include "vdo-component-states.h"
+#include "encodings.h"
 #include "volume-geometry.h"
 
 #include "vdoConfig.h"

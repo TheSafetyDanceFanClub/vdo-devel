@@ -4,6 +4,7 @@
  */
 #include "delta-index.h"
 
+#include <linux/bitops.h>
 #include <linux/bits.h>
 #include <linux/compiler.h>
 #include <linux/limits.h>
@@ -119,9 +120,9 @@
  * delta_zone memory. As extra protection against this happening, the guard list at the end is set
  * to all ones.
  *
- * The delta_zone supports two different forms. The mutable form is created by
- * initialize_delta_zone(), and is used for the volume index and for open chapter indexes. The
- * immutable form is created by initialize_delta_zone_page(), and is used for closed (and cached)
+ * The delta_index supports two different forms. The mutable form is created by
+ * initialize_delta_index(), and is used for the volume index and for open chapter indexes. The
+ * immutable form is created by initialize_delta_index_page(), and is used for closed (and cached)
  * chapter index pages. The immutable form does not allocate delta list headers or temporary
  * offsets, and thus is somewhat more memory efficient.
  *
@@ -234,7 +235,7 @@ static inline u16 get_delta_list_byte_size(const struct delta_list *delta_list)
 {
 	unsigned int bit_offset = delta_list->start % BITS_PER_BYTE;
 
-	return DIV_ROUND_UP(bit_offset + delta_list->size, BITS_PER_BYTE);
+	return BITS_TO_BYTES(bit_offset + delta_list->size);
 }
 
 static void rebalance_delta_zone(const struct delta_zone *delta_zone,
@@ -284,82 +285,55 @@ static void rebalance_delta_zone(const struct delta_zone *delta_zone,
 	}
 }
 
-/* Move the start of the delta list bit stream without moving the end. */
-static inline void move_delta_list_start(struct delta_list *delta_list, int increment)
+static inline size_t get_zone_memory_size(unsigned int zone_count, size_t memory_size)
 {
-	delta_list->start += increment;
-	delta_list->size -= increment;
-}
-
-/* Move the end of the delta list bit stream without moving the start. */
-static inline void move_delta_list_end(struct delta_list *delta_list,
-				       int increment)
-{
-	delta_list->size += increment;
-}
-
-static inline size_t get_zone_memory_size(unsigned int zone_count,
-					  size_t memory_size)
-{
-	size_t zone_size = memory_size / zone_count;
-
 	/* Round up so that each zone is a multiple of 64K in size. */
 	enum {
 		ALLOC_BOUNDARY = 64 * 1024,
 	};
 
-	return (zone_size + ALLOC_BOUNDARY - 1) & -ALLOC_BOUNDARY;
+	return (memory_size / zone_count + ALLOC_BOUNDARY - 1) & -ALLOC_BOUNDARY;
 }
 
-static void empty_delta_lists(struct delta_zone *delta_zone)
-{
-	u64 list_bits;
-	u64 spacing;
-	u64 offset;
-	unsigned int i;
-	struct delta_list *delta_lists = delta_zone->delta_lists;
-
-	/*
-	 * Initialize delta lists to be empty. We keep 2 extra delta list descriptors, one before
-	 * the first real entry and one after so that we don't need to bounds check the array
-	 * access when calculating preceeding and following gap sizes.
-	 *
-	 * Because the delta list headers are zeroed, the head guard list will already be at offset
-	 * zero and size zero.
-	 *
-	 * The end guard list contains guard bytes so that get_field() and get_big_field() can
-	 * safely read past the end of any byte we are interested in.
-	 */
-
-	/* Zero all the delta list headers. */
-	memset(delta_lists, 0, (delta_zone->list_count + 2) * sizeof(struct delta_list));
-
-	/* Set all the bits in the end guard list. */
-	list_bits = (u64) delta_zone->size * BITS_PER_BYTE - GUARD_BITS;
-	delta_lists[delta_zone->list_count + 1].start = list_bits;
-	delta_lists[delta_zone->list_count + 1].size = GUARD_BITS;
-	memset(delta_zone->memory + (list_bits / BITS_PER_BYTE), ~0, POST_FIELD_GUARD_BYTES);
-
-	/* Evenly space out the real delta lists by setting regular offsets. */
-	spacing = list_bits / delta_zone->list_count;
-	offset = spacing / 2;
-	for (i = 1; i <= delta_zone->list_count; i++) {
-		delta_lists[i].start = offset;
-		offset += spacing;
-	}
-
-	/* Update the statistics. */
-	delta_zone->discard_count += delta_zone->record_count;
-	delta_zone->record_count = 0;
-	delta_zone->collision_count = 0;
-}
-
-void empty_delta_index(const struct delta_index *delta_index)
+void reset_delta_index(const struct delta_index *delta_index)
 {
 	unsigned int z;
 
-	for (z = 0; z < delta_index->zone_count; z++)
-		empty_delta_lists(&delta_index->delta_zones[z]);
+	/*
+	 * Initialize all delta lists to be empty. We keep 2 extra delta list descriptors, one
+	 * before the first real entry and one after so that we don't need to bounds check the
+	 * array access when calculating preceeding and following gap sizes.
+	 */
+	for (z = 0; z < delta_index->zone_count; z++) {
+		u64 list_bits;
+		u64 spacing;
+		u64 offset;
+		unsigned int i;
+		struct delta_zone *zone = &delta_index->delta_zones[z];
+		struct delta_list *delta_lists = zone->delta_lists;
+
+		/* Zeroing the delta list headers initializes the head guard list correctly. */
+		memset(delta_lists, 0, (zone->list_count + 2) * sizeof(struct delta_list));
+
+		/* Set all the bits in the end guard list. */
+		list_bits = (u64) zone->size * BITS_PER_BYTE - GUARD_BITS;
+		delta_lists[zone->list_count + 1].start = list_bits;
+		delta_lists[zone->list_count + 1].size = GUARD_BITS;
+		memset(zone->memory + (list_bits / BITS_PER_BYTE), ~0, POST_FIELD_GUARD_BYTES);
+
+		/* Evenly space out the real delta lists by setting regular offsets. */
+		spacing = list_bits / zone->list_count;
+		offset = spacing / 2;
+		for (i = 1; i <= zone->list_count; i++) {
+			delta_lists[i].start = offset;
+			offset += spacing;
+		}
+
+		/* Update the statistics. */
+		zone->discard_count += zone->record_count;
+		zone->record_count = 0;
+		zone->collision_count = 0;
+	}
 }
 
 /* Compute the Huffman coding parameters for the given mean delta. */
@@ -377,16 +351,6 @@ static void compute_coding_constants(unsigned int mean_delta,
 	*min_keys = (1 << *min_bits) - *incr_keys;
 }
 
-EXTERNAL_STATIC void uninitialize_delta_zone(struct delta_zone *delta_zone)
-{
-	UDS_FREE(delta_zone->new_offsets);
-	delta_zone->new_offsets = NULL;
-	UDS_FREE(delta_zone->delta_lists);
-	delta_zone->delta_lists = NULL;
-	UDS_FREE(delta_zone->memory);
-	delta_zone->memory = NULL;
-}
-
 void uninitialize_delta_index(struct delta_index *delta_index)
 {
 	unsigned int z;
@@ -394,19 +358,23 @@ void uninitialize_delta_index(struct delta_index *delta_index)
 	if (delta_index->delta_zones == NULL)
 		return;
 
-	for (z = 0; z < delta_index->zone_count; z++)
-		uninitialize_delta_zone(&delta_index->delta_zones[z]);
+	for (z = 0; z < delta_index->zone_count; z++) {
+		UDS_FREE(UDS_FORGET(delta_index->delta_zones[z].new_offsets));
+		UDS_FREE(UDS_FORGET(delta_index->delta_zones[z].delta_lists));
+		UDS_FREE(UDS_FORGET(delta_index->delta_zones[z].memory));
+	}
 
 	UDS_FREE(delta_index->delta_zones);
 	memset(delta_index, 0, sizeof(struct delta_index));
 }
 
-EXTERNAL_STATIC int initialize_delta_zone(struct delta_zone *delta_zone,
-					    size_t size,
-					    unsigned int first_list,
-					    unsigned int list_count,
-					    unsigned int mean_delta,
-					    unsigned int payload_bits)
+static int initialize_delta_zone(struct delta_zone *delta_zone,
+				 size_t size,
+				 unsigned int first_list,
+				 unsigned int list_count,
+				 unsigned int mean_delta,
+				 unsigned int payload_bits,
+				 u8 tag)
 {
 	int result;
 
@@ -415,20 +383,16 @@ EXTERNAL_STATIC int initialize_delta_zone(struct delta_zone *delta_zone,
 		return result;
 
 	result = UDS_ALLOCATE(list_count + 2, u64, "delta list temp", &delta_zone->new_offsets);
-	if (result != UDS_SUCCESS) {
-		uninitialize_delta_zone(delta_zone);
+	if (result != UDS_SUCCESS)
 		return result;
-	}
 
 	/* Allocate the delta lists. */
 	result = UDS_ALLOCATE(list_count + 2,
 			      struct delta_list,
 			      "delta lists",
 			      &delta_zone->delta_lists);
-	if (result != UDS_SUCCESS) {
-		uninitialize_delta_zone(delta_zone);
+	if (result != UDS_SUCCESS)
 		return result;
-	}
 
 	compute_coding_constants(mean_delta,
 				 &delta_zone->min_bits,
@@ -445,9 +409,8 @@ EXTERNAL_STATIC int initialize_delta_zone(struct delta_zone *delta_zone,
 	delta_zone->overflow_count = 0;
 	delta_zone->first_list = first_list;
 	delta_zone->list_count = list_count;
-	delta_zone->tag = 'm';
+	delta_zone->tag = tag;
 
-	empty_delta_lists(delta_zone);
 	return UDS_SUCCESS;
 }
 
@@ -456,7 +419,8 @@ int initialize_delta_index(struct delta_index *delta_index,
 			   unsigned int list_count,
 			   unsigned int mean_delta,
 			   unsigned int payload_bits,
-			   size_t memory_size)
+			   size_t memory_size,
+			   u8 tag)
 {
 	int result;
 	unsigned int z;
@@ -473,7 +437,7 @@ int initialize_delta_index(struct delta_index *delta_index,
 	delta_index->list_count = list_count;
 	delta_index->lists_per_zone = DIV_ROUND_UP(list_count, zone_count);
 	delta_index->mutable = true;
-	delta_index->tag = 'm';
+	delta_index->tag = tag;
 
 	for (z = 0; z < zone_count; z++) {
 		unsigned int lists_in_zone = delta_index->lists_per_zone;
@@ -496,17 +460,19 @@ int initialize_delta_index(struct delta_index *delta_index,
 
 		zone_memory = get_zone_memory_size(zone_count, memory_size);
 		result = initialize_delta_zone(&delta_index->delta_zones[z],
-						 zone_memory,
-						 first_list_in_zone,
-						 lists_in_zone,
-						 mean_delta,
-						 payload_bits);
+					       zone_memory,
+					       first_list_in_zone,
+					       lists_in_zone,
+					       mean_delta,
+					       payload_bits,
+					       tag);
 		if (result != UDS_SUCCESS) {
 			uninitialize_delta_index(delta_index);
 			return result;
 		}
 	}
 
+	reset_delta_index(delta_index);
 	return UDS_SUCCESS;
 }
 
@@ -591,44 +557,12 @@ static bool verify_delta_index_page(u64 nonce,
 
 	/* Verify that the guard bytes are correctly set to all ones. */
 	for (i = 0; i < POST_FIELD_GUARD_BYTES; i++) {
-		u8 guard_byte;
-
-		guard_byte = memory[memory_size - POST_FIELD_GUARD_BYTES + i];
-		if (guard_byte != (u8) ~0)
+		if (memory[memory_size - POST_FIELD_GUARD_BYTES + i] != (u8) ~0)
 			return false;
 	}
 
 	/* All verifications passed. */
 	return true;
-}
-
-EXTERNAL_STATIC void
-initialize_delta_zone_page(struct delta_zone *delta_zone,
-			   u8 *memory,
-			   size_t size,
-			   unsigned int list_count,
-			   unsigned int mean_delta,
-			   unsigned int payload_bits)
-{
-	compute_coding_constants(mean_delta,
-				 &delta_zone->min_bits,
-				 &delta_zone->min_keys,
-				 &delta_zone->incr_keys);
-	delta_zone->value_bits = payload_bits;
-	delta_zone->memory = memory;
-	delta_zone->delta_lists = NULL;
-	delta_zone->new_offsets = NULL;
-	delta_zone->buffered_writer = NULL;
-	delta_zone->size = size;
-	delta_zone->rebalance_time = 0;
-	delta_zone->rebalance_count = 0;
-	delta_zone->record_count = 0;
-	delta_zone->collision_count = 0;
-	delta_zone->discard_count = 0;
-	delta_zone->overflow_count = 0;
-	delta_zone->first_list = 0;
-	delta_zone->list_count = list_count;
-	delta_zone->tag = 'p';
 }
 
 /* Initialize a delta index page to refer to a supplied page. */
@@ -644,6 +578,7 @@ int initialize_delta_index_page(struct delta_index_page *delta_index_page,
 	u64 first_list;
 	u64 list_count;
 	struct delta_page_header *header = (struct delta_page_header *) memory;
+	struct delta_zone *delta_zone = &delta_index_page->delta_zone;
 	const u8 *nonce_addr = (const u8 *) &header->nonce;
 	const u8 *vcn_addr = (const u8 *) &header->virtual_chapter_number;
 	const u8 *first_list_addr = (const u8 *) &header->first_list;
@@ -672,7 +607,7 @@ int initialize_delta_index_page(struct delta_index_page *delta_index_page,
 			return UDS_CORRUPT_DATA;
 	}
 
-	delta_index_page->delta_index.delta_zones = &delta_index_page->delta_zone;
+	delta_index_page->delta_index.delta_zones = delta_zone;
 	delta_index_page->delta_index.zone_count = 1;
 	delta_index_page->delta_index.list_count = list_count;
 	delta_index_page->delta_index.lists_per_zone = list_count;
@@ -682,12 +617,26 @@ int initialize_delta_index_page(struct delta_index_page *delta_index_page,
 	delta_index_page->lowest_list_number = first_list;
 	delta_index_page->highest_list_number = first_list + list_count - 1;
 
-	initialize_delta_zone_page(&delta_index_page->delta_zone,
-				   memory,
-				   memory_size,
-				   list_count,
-				   mean_delta,
-				   payload_bits);
+	compute_coding_constants(mean_delta,
+				 &delta_zone->min_bits,
+				 &delta_zone->min_keys,
+				 &delta_zone->incr_keys);
+	delta_zone->value_bits = payload_bits;
+	delta_zone->memory = memory;
+	delta_zone->delta_lists = NULL;
+	delta_zone->new_offsets = NULL;
+	delta_zone->buffered_writer = NULL;
+	delta_zone->size = memory_size;
+	delta_zone->rebalance_time = 0;
+	delta_zone->rebalance_count = 0;
+	delta_zone->record_count = 0;
+	delta_zone->collision_count = 0;
+	delta_zone->discard_count = 0;
+	delta_zone->overflow_count = 0;
+	delta_zone->first_list = 0;
+	delta_zone->list_count = list_count;
+	delta_zone->tag = 'p';
+
 	return UDS_SUCCESS;
 }
 
@@ -811,11 +760,7 @@ static void move_bits_up(const u8 *from, u64 from_offset, u8 *to, u64 to_offset,
  * bits from the source to a temporary value, and then move all the bits from the temporary value
  * to the destination. The size and memory offsets are measured in bits.
  */
-EXTERNAL_STATIC void move_bits(const u8 *from,
-			       u64 from_offset,
-			       u8 *to,
-			       u64 to_offset,
-			       int size)
+EXTERNAL_STATIC void move_bits(const u8 *from, u64 from_offset, u8 *to, u64 to_offset, int size)
 {
 	u64 field;
 
@@ -940,15 +885,6 @@ void swap_delta_index_page_endianness(u8 *memory)
 }
 
 #endif /* TEST_INTERNAL */
-void set_delta_index_tag(struct delta_index *delta_index, u8 tag)
-{
-	unsigned int z;
-
-	delta_index->tag = tag;
-	for (z = 0; z < delta_index->zone_count; z++)
-		delta_index->delta_zones[z].tag = tag;
-}
-
 static int __must_check
 decode_delta_index_header(struct buffer *buffer, struct delta_index_header *header)
 {
@@ -1135,7 +1071,7 @@ int start_restoring_delta_index(struct delta_index *delta_index,
 						collision_count,
 						record_count);
 
-	empty_delta_index(delta_index);
+	reset_delta_index(delta_index);
 	delta_index->delta_zones[0].record_count = record_count;
 	delta_index->delta_zones[0].collision_count = collision_count;
 
@@ -1162,7 +1098,7 @@ int start_restoring_delta_index(struct delta_index *delta_index,
 				delta_index->load_lists[z] += 1;
 
 			list_number = first_list[z] + i;
-			zone_number = get_delta_zone_number(delta_index, list_number);
+			zone_number = list_number / delta_index->lists_per_zone;
 			delta_zone = &delta_index->delta_zones[zone_number];
 			list_number -= delta_zone->first_list;
 			delta_zone->delta_lists[list_number + 1].size = delta_list_size;
@@ -1199,7 +1135,7 @@ static int restore_delta_list_to_zone(struct delta_zone *delta_zone,
 						save_info->index);
 
 	bit_count = (unsigned int) save_info->bit_offset + delta_list->size;
-	byte_count = DIV_ROUND_UP(bit_count, BITS_PER_BYTE);
+	byte_count = BITS_TO_BYTES(bit_count);
 	if (save_info->byte_count != byte_count)
 		return uds_log_warning_strerror(UDS_CORRUPT_DATA,
 						"unexpected delta list size %u != %u",
@@ -1214,51 +1150,30 @@ static int restore_delta_list_to_zone(struct delta_zone *delta_zone,
 	return UDS_SUCCESS;
 }
 
-static int __must_check
-read_delta_list_save_info(struct buffered_reader *reader, struct delta_list_save_info *save_info)
-{
-	int result;
-	u8 buffer[sizeof(struct delta_list_save_info)];
-
-	result = read_from_buffered_reader(reader, buffer, sizeof(buffer));
-	if (result != UDS_SUCCESS)
-		return result;
-
-	save_info->tag = buffer[0];
-	save_info->bit_offset = buffer[1];
-	save_info->byte_count = get_unaligned_le16(&buffer[2]);
-	save_info->index = get_unaligned_le32(&buffer[4]);
-	return result;
-}
-
-static int read_saved_delta_list(struct delta_list_save_info *save_info,
-				 struct buffered_reader *buffered_reader)
-{
-	int result;
-
-	result = read_delta_list_save_info(buffered_reader, save_info);
-	if (result != UDS_SUCCESS)
-		return uds_log_warning_strerror(result, "failed to read delta list data");
-
-	if ((save_info->bit_offset >= BITS_PER_BYTE) ||
-	    (save_info->byte_count > DELTA_LIST_MAX_BYTE_COUNT))
-		return uds_log_warning_strerror(UDS_CORRUPT_DATA, "corrupt delta list data");
-
-	return UDS_SUCCESS;
-}
-
 static int restore_delta_list_data(struct delta_index *delta_index,
 				   unsigned int load_zone,
 				   struct buffered_reader *buffered_reader,
 				   u8 *data)
 {
 	int result;
-	struct delta_list_save_info save_info = { 0 };
+	struct delta_list_save_info save_info;
+	u8 buffer[sizeof(struct delta_list_save_info)];
 	unsigned int new_zone;
 
-	result = read_saved_delta_list(&save_info, buffered_reader);
+	result = read_from_buffered_reader(buffered_reader, buffer, sizeof(buffer));
 	if (result != UDS_SUCCESS)
-		return result;
+		return uds_log_warning_strerror(result, "failed to read delta list data");
+
+	save_info = (struct delta_list_save_info) {
+		.tag = buffer[0],
+		.bit_offset = buffer[1],
+		.byte_count = get_unaligned_le16(&buffer[2]),
+		.index = get_unaligned_le32(&buffer[4]),
+	};
+
+	if ((save_info.bit_offset >= BITS_PER_BYTE) ||
+	    (save_info.byte_count > DELTA_LIST_MAX_BYTE_COUNT))
+		return uds_log_warning_strerror(UDS_CORRUPT_DATA, "corrupt delta list data");
 
 	/* Make sure the data is intended for this delta index. */
 	if (save_info.tag != delta_index->tag)
@@ -1276,7 +1191,7 @@ static int restore_delta_list_data(struct delta_index *delta_index,
 						"failed to read delta list data");
 
 	delta_index->load_lists[load_zone] -= 1;
-	new_zone = get_delta_zone_number(delta_index, save_info.index);
+	new_zone = save_info.index / delta_index->lists_per_zone;
 	return restore_delta_list_to_zone(&delta_index->delta_zones[new_zone], &save_info, data);
 }
 
@@ -1311,26 +1226,18 @@ int finish_restoring_delta_index(struct delta_index *delta_index,
 	return saved_result;
 }
 
-void abort_restoring_delta_index(const struct delta_index *delta_index)
-{
-	unsigned int z;
-
-	for (z = 0; z < delta_index->zone_count; z++)
-		empty_delta_lists(&delta_index->delta_zones[z]);
-}
-
 int check_guard_delta_lists(struct buffered_reader **buffered_readers, unsigned int reader_count)
 {
 	int result;
 	unsigned int z;
-	struct delta_list_save_info save_info;
+	u8 buffer[sizeof(struct delta_list_save_info)];
 
 	for (z = 0; z < reader_count; z++) {
-		result = read_delta_list_save_info(buffered_readers[z], &save_info);
+		result = read_from_buffered_reader(buffered_readers[z], buffer, sizeof(buffer));
 		if (result != UDS_SUCCESS)
 			return result;
 
-		if (save_info.tag != 'z')
+		if (buffer[0] != 'z')
 			return UDS_CORRUPT_DATA;
 	}
 
@@ -1376,40 +1283,28 @@ encode_delta_index_header(struct buffer *buffer, struct delta_index_header *head
 		      sizeof(*header));
 }
 
-static int __must_check write_delta_list_save_info(struct buffered_writer *buffered_writer,
-						   struct delta_list_save_info *save_info)
-{
-	u8 buffer[sizeof(struct delta_list_save_info)];
-
-	buffer[0] = save_info->tag;
-	buffer[1] = save_info->bit_offset;
-	put_unaligned_le16(save_info->byte_count, &buffer[2]);
-	put_unaligned_le32(save_info->index, &buffer[4]);
-	return write_to_buffered_writer(buffered_writer, buffer, sizeof(buffer));
-}
-
-static int flush_delta_list(struct delta_zone *delta_zone, unsigned int flush_index)
+static int flush_delta_list(struct delta_zone *zone, unsigned int flush_index)
 {
 	struct delta_list *delta_list;
-	struct delta_list_save_info save_info;
+	u8 buffer[sizeof(struct delta_list_save_info)];
 	int result;
 
-	delta_list = &delta_zone->delta_lists[flush_index + 1];
-	save_info.tag = delta_zone->tag;
-	save_info.bit_offset = delta_list->start % BITS_PER_BYTE;
-	save_info.byte_count = get_delta_list_byte_size(delta_list);
-	save_info.index = delta_zone->first_list + flush_index;
+	delta_list = &zone->delta_lists[flush_index + 1];
 
-	result = write_delta_list_save_info(delta_zone->buffered_writer, &save_info);
+	buffer[0] = zone->tag;
+	buffer[1] = delta_list->start % BITS_PER_BYTE;
+	put_unaligned_le16(get_delta_list_byte_size(delta_list), &buffer[2]);
+	put_unaligned_le32(zone->first_list + flush_index, &buffer[4]);
+
+	result = write_to_buffered_writer(zone->buffered_writer, buffer, sizeof(buffer));
 	if (result != UDS_SUCCESS) {
 		uds_log_warning_strerror(result, "failed to write delta list memory");
 		return result;
 	}
 
-	result = write_to_buffered_writer(delta_zone->buffered_writer,
-					  delta_zone->memory +
-					  get_delta_list_byte_start(delta_list),
-					  save_info.byte_count);
+	result = write_to_buffered_writer(zone->buffered_writer,
+					  zone->memory + get_delta_list_byte_start(delta_list),
+					  get_delta_list_byte_size(delta_list));
 	if (result != UDS_SUCCESS)
 		uds_log_warning_strerror(result, "failed to write delta list memory");
 
@@ -1493,18 +1388,16 @@ int finish_saving_delta_index(const struct delta_index *delta_index, unsigned in
 int write_guard_delta_list(struct buffered_writer *buffered_writer)
 {
 	int result;
-	struct delta_list_save_info save_info;
+	u8 buffer[sizeof(struct delta_list_save_info)];
 
-	save_info.tag = 'z';
-	save_info.bit_offset = 0;
-	save_info.byte_count = 0;
-	save_info.index = 0;
-	result = write_to_buffered_writer(buffered_writer,
-					  (const u8 *) &save_info,
-					  sizeof(struct delta_list_save_info));
+	memset(buffer, 0, sizeof(struct delta_list_save_info));
+	buffer[0] = 'z';
+
+	result = write_to_buffered_writer(buffered_writer, buffer, sizeof(buffer));
 	if (result != UDS_SUCCESS)
 		uds_log_warning_strerror(result, "failed to write guard delta list");
-	return result;
+
+	return UDS_SUCCESS;
 }
 
 size_t compute_delta_index_save_bytes(unsigned int list_count, size_t memory_size)
@@ -1523,16 +1416,6 @@ static int assert_not_at_end(const struct delta_index_entry *delta_entry)
 		result = UDS_BAD_STATE;
 
 	return result;
-}
-
-static void prefetch_delta_list(const struct delta_zone *delta_zone,
-				const struct delta_list *delta_list)
-{
-	u64 memory_offset = delta_list->start / BITS_PER_BYTE;
-	const u8 *addr = &delta_zone->memory[memory_offset];
-	unsigned int size = delta_list->size / BITS_PER_BYTE;
-
-	prefetch_range(addr, size, false);
 }
 
 /*
@@ -1560,7 +1443,7 @@ int start_delta_index_search(const struct delta_index *delta_index,
 	if (result != UDS_SUCCESS)
 		return UDS_CORRUPT_DATA;
 
-	zone_number = get_delta_zone_number(delta_index, list_number);
+	zone_number = list_number / delta_index->lists_per_zone;
 	delta_zone = &delta_index->delta_zones[zone_number];
 	list_number -= delta_zone->first_list;
 	result = ASSERT((list_number < delta_zone->list_count),
@@ -1599,7 +1482,9 @@ int start_delta_index_search(const struct delta_index *delta_index,
 			 * This usually means we're about to walk the entire delta list, so get all
 			 * of it into the CPU cache.
 			 */
-			prefetch_delta_list(delta_zone, delta_list);
+			prefetch_range(&delta_zone->memory[delta_list->start / BITS_PER_BYTE],
+				       delta_list->size / BITS_PER_BYTE,
+				       false);
 	}
 
 	delta_entry->at_end = false;
@@ -1729,21 +1614,9 @@ static void set_delta(struct delta_index_entry *delta_entry, unsigned int delta)
 	delta_entry->entry_bits = delta_entry->value_bits + key_bits;
 }
 
-static void set_collision(struct delta_index_entry *delta_entry)
-{
-	delta_entry->is_collision = true;
-	delta_entry->entry_bits += COLLISION_BITS;
-}
-
-/* Get the bit offset of the collision field of an entry. */
-static inline u64 get_collision_offset(const struct delta_index_entry *entry)
-{
-	return get_delta_entry_offset(entry) + entry->entry_bits - COLLISION_BITS;
-}
-
 static void get_collision_name(const struct delta_index_entry *entry, u8 *name)
 {
-	u64 offset = get_collision_offset(entry);
+	u64 offset = get_delta_entry_offset(entry) + entry->entry_bits - COLLISION_BITS;
 	const u8 *addr = entry->delta_zone->memory + offset / BITS_PER_BYTE;
 	int size = COLLISION_BYTES;
 	int shift = offset % BITS_PER_BYTE;
@@ -1754,7 +1627,7 @@ static void get_collision_name(const struct delta_index_entry *entry, u8 *name)
 
 static void set_collision_name(const struct delta_index_entry *entry, const u8 *name)
 {
-	u64 offset = get_collision_offset(entry);
+	u64 offset = get_delta_entry_offset(entry) + entry->entry_bits - COLLISION_BITS;
 	u8 *addr = entry->delta_zone->memory + offset / BITS_PER_BYTE;
 	int size = COLLISION_BYTES;
 	int shift = offset % BITS_PER_BYTE;
@@ -1878,9 +1751,8 @@ int set_delta_entry_value(const struct delta_index_entry *delta_entry, unsigned 
  * Extend the memory used by the delta lists by adding growing_size bytes before the list indicated
  * by growing_index, then rebalancing the lists in the new chunk.
  */
-EXTERNAL_STATIC int extend_delta_zone(struct delta_zone *delta_zone,
-				      unsigned int growing_index,
-				      size_t growing_size)
+EXTERNAL_STATIC int
+extend_delta_zone(struct delta_zone *delta_zone, unsigned int growing_index, size_t growing_size)
 {
 	ktime_t start_time;
 	ktime_t end_time;
@@ -1969,20 +1841,18 @@ static int insert_bits(struct delta_index_entry *delta_entry, int size)
 		before_flag = before_size < after_size;
 		if (!before_flag)
 			growing_index++;
-		result = extend_delta_zone(delta_zone,
-					   growing_index,
-					   DIV_ROUND_UP(size, BITS_PER_BYTE));
+		result = extend_delta_zone(delta_zone, growing_index, BITS_TO_BYTES(size));
 		if (result != UDS_SUCCESS)
 			return result;
 	}
 
+	delta_list->size += size;
 	if (before_flag) {
 		source = delta_list->start;
 		destination = source - size;
-		move_delta_list_start(delta_list, -size);
+		delta_list->start -= size;
 		count = before_size;
 	} else {
-		move_delta_list_end(delta_list, size);
 		source = delta_list->start + delta_entry->offset;
 		destination = source + size;
 		count = after_size;
@@ -2076,7 +1946,8 @@ int put_delta_index_entry(struct delta_index_entry *delta_entry,
 
 		delta_entry->offset += delta_entry->entry_bits;
 		set_delta(delta_entry, 0);
-		set_collision(delta_entry);
+		delta_entry->is_collision = true;
+		delta_entry->entry_bits += COLLISION_BITS;
 		result = insert_bits(delta_entry, delta_entry->entry_bits);
 	} else if (delta_entry->at_end) {
 		/* Insert a new entry at the end of the delta list. */
@@ -2165,13 +2036,13 @@ static void delete_bits(const struct delta_index_entry *delta_entry, int size)
 		before_flag = (free_before < free_after);
 	}
 
+	delta_list->size -= size;
 	if (before_flag) {
 		source = delta_list->start;
 		destination = source + size;
-		move_delta_list_start(delta_list, size);
+		delta_list->start += size;
 		count = before_size;
 	} else {
-		move_delta_list_end(delta_list, -size);
 		destination = delta_list->start + delta_entry->offset;
 		source = destination + size;
 		count = after_size;
@@ -2237,54 +2108,6 @@ int remove_delta_index_entry(struct delta_index_entry *delta_entry)
 	}
 
 	return UDS_SUCCESS;
-}
-
-unsigned int
-get_delta_zone_first_list(const struct delta_index *delta_index, unsigned int zone_number)
-{
-	return delta_index->delta_zones[zone_number].first_list;
-}
-
-unsigned int
-get_delta_zone_list_count(const struct delta_index *delta_index, unsigned int zone_number)
-{
-	return delta_index->delta_zones[zone_number].list_count;
-}
-
-u64 get_delta_zone_bits_used(const struct delta_index *delta_index, unsigned int zone_number)
-{
-	unsigned int i;
-	u64 bit_count = 0;
-	const struct delta_zone *delta_zone;
-
-	delta_zone = &delta_index->delta_zones[zone_number];
-	for (i = 0; i < delta_zone->list_count; i++)
-		bit_count += delta_zone->delta_lists[i + 1].size;
-
-	return bit_count;
-}
-
-#ifdef TEST_INTERNAL
-u64 get_delta_index_bits_used(const struct delta_index *delta_index)
-{
-	u64 bit_count = 0;
-	unsigned int z;
-
-	for (z = 0; z < delta_index->zone_count; z++)
-		bit_count += get_delta_zone_bits_used(delta_index, z);
-	return bit_count;
-}
-
-#endif /* TEST_INTERNAL */
-u64 get_delta_index_bits_allocated(const struct delta_index *delta_index)
-{
-	u64 byte_count = 0;
-	unsigned int z;
-
-	for (z = 0; z < delta_index->zone_count; z++)
-		byte_count += delta_index->delta_zones[z].size;
-
-	return byte_count * BITS_PER_BYTE;
 }
 
 static size_t get_delta_zone_allocated(const struct delta_zone *delta_zone)

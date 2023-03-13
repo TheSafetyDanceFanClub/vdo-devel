@@ -11,20 +11,19 @@
 #include <linux/completion.h>
 #include <linux/kobject.h>
 #include <linux/list.h>
+#include <linux/spinlock.h>
 
 #include "admin-state.h"
+#include "encodings.h"
 #include "packer.h"
 #include "physical-zone.h"
 #include "statistics.h"
-#include "super-block.h"
-#include "read-only-notifier.h"
 #include "thread-config.h"
 #ifdef __KERNEL__
 #include "thread-registry.h"
 #endif /* __KERNEL__ */
 #include "types.h"
 #include "uds.h"
-#include "vdo-component-states.h"
 #ifdef VDO_INTERNAL
 #include "vdo-histograms.h"
 #endif /* VDO_INTERNAL */
@@ -32,10 +31,54 @@
 #include "volume-geometry.h"
 #include "work-queue.h"
 
+enum notifier_state {
+	/** Notifications are allowed but not in progress */
+	MAY_NOTIFY,
+	/** A notification is in progress */
+	NOTIFYING,
+	/** Notifications are not allowed */
+	MAY_NOT_NOTIFY,
+	/** A notification has completed */
+	NOTIFIED,
+};
+
+/**
+ * typedef vdo_read_only_notification - A function to notify a listener that the VDO has gone
+ *                                      read-only.
+ * @listener: The object to notify.
+ * @parent: The completion to notify in order to acknowledge the notification.
+ */
+typedef void vdo_read_only_notification(void *listener, struct vdo_completion *parent);
+
+/*
+ * An object to be notified when the VDO enters read-only mode
+ */
+struct read_only_listener {
+	/* The listener */
+	void *listener;
+	/* The method to call to notify the listener */
+	vdo_read_only_notification *notify;
+	/* A pointer to the next listener */
+	struct read_only_listener *next;
+};
+
 struct vdo_thread {
 	struct vdo *vdo;
 	thread_id_t thread_id;
 	struct vdo_work_queue *queue;
+	/*
+	 * Each thread maintains its own notion of whether the VDO is read-only so that the
+	 * read-only state can be checked from any base thread without worrying about
+	 * synchronization or thread safety. This does mean that knowledge of the VDO going
+	 * read-only does not occur simultaneously across the VDO's threads, but that does not seem
+	 * to cause any problems.
+	 */
+	bool is_read_only;
+	/*
+	 * A list of objects waiting to be notified on this thread that the VDO has entered
+	 * read-only mode.
+	 */
+	struct read_only_listener *listeners;
 #ifdef __KERNEL__
 	struct registered_thread allocating_thread;
 #endif /* __KERNEL__ */
@@ -73,6 +116,28 @@ struct atomic_statistics {
 	struct atomic_bio_stats bios_page_cache_completed;
 };
 
+struct read_only_notifier {
+	/* The completion for entering read-only mode */
+	struct vdo_completion completion;
+	/* A completion waiting for notifications to be drained or enabled */
+	struct vdo_completion *waiter;
+	/* Lock to protect the next two fields */
+	spinlock_t lock;
+	/* The code of the error which put the VDO into read-only mode */
+	int read_only_error;
+	/* The current state of the notifier (values described above) */
+	enum notifier_state state;
+};
+
+struct vdo_super_block {
+	/* The vio for reading and writing the super block to disk */
+	struct vio vio;
+	/* The super block codec */
+	struct super_block_codec codec;
+	/* Whether this super block may not be written */
+	bool unwriteable;
+};
+
 struct data_vio_pool;
 
 struct vdo_administrator {
@@ -100,14 +165,14 @@ struct vdo {
 	 */
 	unsigned int instance;
 	/* The read-only notifier */
-	struct read_only_notifier *read_only_notifier;
+	struct read_only_notifier read_only_notifier;
 	/* The load-time configuration of this vdo */
 	struct device_config *device_config;
 	/* The thread mapping */
 	struct thread_config *thread_config;
 
 	/* The super block */
-	struct vdo_super_block *super_block;
+	struct vdo_super_block super_block;
 
 	/* Our partitioning of the physical layer's storage */
 	struct vdo_layout *layout;
@@ -237,6 +302,8 @@ vdo_make(unsigned int instance, struct device_config *config, char **reason, str
 
 void vdo_destroy(struct vdo *vdo);
 
+void vdo_load_super_block(struct vdo *vdo, struct vdo_completion *parent);
+
 int __must_check vdo_add_sysfs_stats_dir(struct vdo *vdo);
 
 struct block_device * __must_check vdo_get_backing_device(const struct vdo *vdo);
@@ -261,7 +328,20 @@ void vdo_set_state(struct vdo *vdo, enum vdo_state state);
 
 void vdo_save_components(struct vdo *vdo, struct vdo_completion *parent);
 
+int vdo_register_read_only_listener(struct vdo *vdo,
+				    void *listener,
+				    vdo_read_only_notification *notification,
+				    thread_id_t thread_id);
+
 int vdo_enable_read_only_entry(struct vdo *vdo);
+
+void vdo_wait_until_not_entering_read_only_mode(struct vdo_completion *parent);
+
+void vdo_allow_read_only_mode_entry(struct vdo_completion *parent);
+
+void vdo_enter_read_only_mode(struct vdo *vdo, int error_code);
+
+bool __must_check vdo_is_read_only(struct vdo *vdo);
 
 bool __must_check vdo_in_read_only_mode(const struct vdo *vdo);
 
@@ -298,5 +378,4 @@ void vdo_dump_status(const struct vdo *vdo);
 block_count_t __must_check vdo_get_physical_blocks_allocated(const struct vdo *vdo);
 block_count_t __must_check vdo_get_physical_blocks_overhead(const struct vdo *vdo);
 #endif /* INTERNAL */
-
 #endif /* VDO_H */

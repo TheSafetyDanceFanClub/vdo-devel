@@ -85,7 +85,7 @@ struct delta_list_save_info {
 	u16 byte_count;
 	/* The delta list number within the delta index */
 	u32 index;
-};
+} __packed;
 
 struct delta_index {
 	/* The zones */
@@ -204,29 +204,14 @@ int __must_check extend_delta_zone(struct delta_zone *delta_zone,
 
 void swap_delta_index_page_endianness(u8 *memory);
 
-void uninitialize_delta_zone(struct delta_zone *delta_zone);
-
-int __must_check initialize_delta_zone(struct delta_zone *delta_zone,
-				       size_t size,
-				       unsigned int first_list,
-				       unsigned int list_count,
-				       unsigned int mean_delta,
-				       unsigned int payload_bits);
-
-void initialize_delta_zone_page(struct delta_zone *delta_zone,
-				u8 *memory,
-				size_t size,
-				unsigned int list_count,
-				unsigned int mean_delta,
-				unsigned int payload_bits);
-
 #endif /* TEST_INTERNAL */
 int __must_check initialize_delta_index(struct delta_index *delta_index,
 					unsigned int zone_count,
 					unsigned int list_count,
 					unsigned int mean_delta,
 					unsigned int payload_bits,
-					size_t memory_size);
+					size_t memory_size,
+					u8 tag);
 
 int __must_check initialize_delta_index_page(struct delta_index_page *delta_index_page,
 					     u64 expected_nonce,
@@ -237,7 +222,7 @@ int __must_check initialize_delta_index_page(struct delta_index_page *delta_inde
 
 void uninitialize_delta_index(struct delta_index *delta_index);
 
-void empty_delta_index(const struct delta_index *delta_index);
+void reset_delta_index(const struct delta_index *delta_index);
 
 int __must_check pack_delta_index_page(const struct delta_index *delta_index,
 				       u64 header_nonce,
@@ -247,8 +232,6 @@ int __must_check pack_delta_index_page(const struct delta_index *delta_index,
 				       unsigned int first_list,
 				       unsigned int *list_count);
 
-void set_delta_index_tag(struct delta_index *delta_index, u8 tag);
-
 int __must_check start_restoring_delta_index(struct delta_index *delta_index,
 					     struct buffered_reader **buffered_readers,
 					     unsigned int reader_count);
@@ -256,8 +239,6 @@ int __must_check start_restoring_delta_index(struct delta_index *delta_index,
 int __must_check finish_restoring_delta_index(struct delta_index *delta_index,
 					      struct buffered_reader **buffered_readers,
 					      unsigned int reader_count);
-
-void abort_restoring_delta_index(const struct delta_index *delta_index);
 
 int __must_check
 check_guard_delta_lists(struct buffered_reader **buffered_readers, unsigned int reader_count);
@@ -305,27 +286,6 @@ int __must_check put_delta_index_entry(struct delta_index_entry *delta_entry,
 
 int __must_check
 remove_delta_index_entry(struct delta_index_entry *delta_entry);
-
-static inline unsigned int
-get_delta_zone_number(const struct delta_index *delta_index, unsigned int list_number)
-{
-	return list_number / delta_index->lists_per_zone;
-}
-
-unsigned int
-get_delta_zone_first_list(const struct delta_index *delta_index, unsigned int zone_number);
-
-unsigned int
-get_delta_zone_list_count(const struct delta_index *delta_index, unsigned int zone_number);
-
-u64 __must_check
-get_delta_zone_bits_used(const struct delta_index *delta_index, unsigned int zone_number);
-
-#ifdef TEST_INTERNAL
-u64 __must_check get_delta_index_bits_used(const struct delta_index *delta_index);
-
-#endif /* TEST_INTERNAL */
-u64 __must_check get_delta_index_bits_allocated(const struct delta_index *delta_index);
 
 void get_delta_index_stats(const struct delta_index *delta_index, struct delta_index_stats *stats);
 

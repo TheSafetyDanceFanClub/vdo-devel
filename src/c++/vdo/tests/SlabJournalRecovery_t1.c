@@ -12,14 +12,14 @@
 
 #include "admin-state.h"
 #include "block-map.h"
+#include "encodings.h"
+#include "recovery.h"
 #include "recovery-journal.h"
 #include "ref-counts.h"
-#include "slab.h"
 #include "slab-depot.h"
 #include "slab-journal.h"
+#include "slab.h"
 #include "vdo.h"
-#include "vdo-component-states.h"
-#include "vdo-recovery.h"
 
 #include "asyncLayer.h"
 #include "blockAllocatorUtils.h"
@@ -41,7 +41,7 @@ enum {
 };
 
 static struct recovery_journal *journal = NULL;
-static struct vdo_completion    subTaskCompletion;
+static struct vdo_completion    repair;
 static struct waiter            testWaiter;
 static struct pooled_vio       *pooled;
 static struct slab_journal     *slabJournal;
@@ -98,7 +98,7 @@ static void initializeRebuildTest(void)
 
   journal = vdo->recovery_journal;
 
-  vdo_initialize_completion(&subTaskCompletion, vdo, VDO_SUB_TASK_COMPLETION);
+  vdo_initialize_completion(&repair, vdo, VDO_TEST_COMPLETION);
 }
 
 /**
@@ -113,13 +113,13 @@ static void tearDownRebuildTest(void)
 /**********************************************************************/
 static void recoverJournalAction(struct vdo_completion *completion)
 {
-  vdo_prepare_completion(&subTaskCompletion,
-                         vdo_finish_completion_parent_callback,
-                         vdo_finish_completion_parent_callback,
+  vdo_prepare_completion(&repair,
+                         finishParentCallback,
+                         finishParentCallback,
                          completion->callback_thread_id,
                          completion);
   vdo->load_state = VDO_DIRTY;
-  vdo_repair(&subTaskCompletion);
+  vdo_repair(&repair);
 }
 
 /**

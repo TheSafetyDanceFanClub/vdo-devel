@@ -15,16 +15,15 @@
 
 #include "admin-state.h"
 #include "completion.h"
+#include "encodings.h"
 #include "io-submitter.h"
 #include "physical-zone.h"
-#include "read-only-notifier.h"
-#include "slab.h"
+#include "slab-depot.h"
 #include "slab-journal.h"
-#include "slab-summary.h"
+#include "slab.h"
 #include "status-codes.h"
 #include "string-utils.h"
 #include "vdo.h"
-#include "vdo-component-states.h"
 #include "vio.h"
 #include "wait-queue.h"
 
@@ -150,8 +149,6 @@ static bool advance_search_cursor(struct ref_counts *ref_counts)
  * vdo_make_ref_counts() - Create a reference counting object.
  * @block_count: The number of physical blocks that can be referenced.
  * @slab: The slab of the ref counts object.
- * @origin: The layer PBN at which to save ref_counts.
- * @read_only_notifier: The context for tracking read-only mode.
  * @ref_counts_ptr: The pointer to hold the new ref counts object.
  *
  * A reference counting object can keep a reference count for every physical block in the VDO
@@ -162,8 +159,6 @@ static bool advance_search_cursor(struct ref_counts *ref_counts)
  */
 int vdo_make_ref_counts(block_count_t block_count,
 			struct vdo_slab *slab,
-			physical_block_number_t origin,
-			struct read_only_notifier *read_only_notifier,
 			struct ref_counts **ref_counts_ptr)
 {
 	size_t index, bytes;
@@ -193,10 +188,7 @@ int vdo_make_ref_counts(block_count_t block_count,
 	ref_counts->slab = slab;
 	ref_counts->block_count = block_count;
 	ref_counts->free_blocks = block_count;
-	ref_counts->origin = origin;
 	ref_counts->reference_block_count = ref_block_count;
-	ref_counts->read_only_notifier = read_only_notifier;
-	ref_counts->statistics = &slab->allocator->ref_counts_statistics;
 	ref_counts->search_cursor.first_block = &ref_counts->blocks[0];
 	ref_counts->search_cursor.last_block = &ref_counts->blocks[ref_block_count - 1];
 	vdo_reset_search_cursor(ref_counts);
@@ -255,7 +247,7 @@ bool vdo_are_ref_counts_active(struct ref_counts *ref_counts)
 
 static void enter_ref_counts_read_only_mode(struct ref_counts *ref_counts, int result)
 {
-	vdo_enter_read_only_mode(ref_counts->read_only_notifier, result);
+	vdo_enter_read_only_mode(ref_counts->slab->allocator->depot->vdo, result);
 	vdo_check_if_slab_drained(ref_counts->slab);
 }
 
@@ -272,18 +264,6 @@ static void dirty_block(struct reference_block *block)
 	block->is_dirty = true;
 	if (!block->is_writing)
 		enqueue_waiter(&block->ref_counts->dirty_blocks, &block->waiter);
-}
-
-/**
- * vdo_get_unreferenced_block_count() - Get the stored count of the number of blocks that are
- *                                      currently free.
- * @ref_counts: The ref_counts object.
- *
- * Return: The number of blocks with a reference count of zero.
- */
-block_count_t vdo_get_unreferenced_block_count(struct ref_counts *ref_counts)
-{
-	return ref_counts->free_blocks;
 }
 
 /**
@@ -1134,22 +1114,18 @@ static void finish_summary_update(struct waiter *waiter, void *context)
 static void update_slab_summary_as_clean(struct ref_counts *ref_counts)
 {
 	tail_block_offset_t offset;
-	struct slab_summary_zone *summary = ref_counts->slab->allocator->summary;
-
-	if (summary == NULL)
-		return;
+	struct vdo_slab *slab = ref_counts->slab;
 
 	/* Update the slab summary to indicate this ref_counts is clean. */
-	offset = vdo_get_summarized_tail_block_offset(summary, ref_counts->slab->slab_number);
+	offset = slab->allocator->summary_entries[slab->slab_number].tail_block_offset;
 	ref_counts->updating_slab_summary = true;
 	ref_counts->slab_summary_waiter.callback = finish_summary_update;
-	vdo_update_slab_summary_entry(summary,
+	vdo_update_slab_summary_entry(slab,
 				      &ref_counts->slab_summary_waiter,
-				      ref_counts->slab->slab_number,
 				      offset,
 				      true,
 				      true,
-				      get_slab_free_block_count(ref_counts->slab));
+				      ref_counts->free_blocks);
 }
 
 /**
@@ -1195,7 +1171,7 @@ static void finish_reference_block_write(struct vdo_completion *completion)
 	 */
 	block->is_writing = false;
 
-	if (vdo_is_read_only(ref_counts->read_only_notifier)) {
+	if (vdo_is_read_only(ref_counts->slab->allocator->depot->vdo)) {
 		vdo_check_if_slab_drained(ref_counts->slab);
 		return;
 	}
@@ -1280,7 +1256,7 @@ static void write_reference_block(struct waiter *waiter, void *context)
 
 	vdo_pack_reference_block(block, pooled->vio.data);
 	block_offset = (block - block->ref_counts->blocks);
-	pbn = (block->ref_counts->origin + block_offset);
+	pbn = (block->ref_counts->slab->ref_counts_origin + block_offset);
 	block->slab_journal_lock_to_release = block->slab_journal_lock;
 	completion->parent = block;
 
@@ -1295,8 +1271,8 @@ static void write_reference_block(struct waiter *waiter, void *context)
 	 * Flush before writing to ensure that the recovery journal and slab journal entries which
 	 * cover this reference update are stable (VDO-2331).
 	 */
-	WRITE_ONCE(block->ref_counts->statistics->blocks_written,
-		   block->ref_counts->statistics->blocks_written + 1);
+	WRITE_ONCE(block->ref_counts->slab->allocator->ref_counts_statistics.blocks_written,
+		   block->ref_counts->slab->allocator->ref_counts_statistics.blocks_written + 1);
 
 	completion->callback_thread_id = ((struct block_allocator *) pooled->context)->thread_id;
 	submit_metadata_vio(&pooled->vio,
@@ -1320,7 +1296,7 @@ static void launch_reference_block_write(struct waiter *waiter, void *context)
 	struct reference_block *block;
 	struct ref_counts *ref_counts = context;
 
-	if (vdo_is_read_only(ref_counts->read_only_notifier))
+	if (vdo_is_read_only(ref_counts->slab->allocator->depot->vdo))
 		return;
 
 	ref_counts->active_count++;
@@ -1498,7 +1474,7 @@ static void load_reference_block(struct waiter *waiter, void *context)
 
 	vio->completion.parent = block;
 	submit_metadata_vio(vio,
-			    block->ref_counts->origin + block_offset,
+			    block->ref_counts->slab->ref_counts_origin + block_offset,
 			    load_reference_block_endio,
 			    handle_io_error,
 			    REQ_OP_READ);
@@ -1534,18 +1510,19 @@ void vdo_drain_ref_counts(struct ref_counts *ref_counts)
 {
 	struct vdo_slab *slab = ref_counts->slab;
 	bool save = false;
+	bool load = slab->allocator->summary_entries[slab->slab_number].load_ref_counts;
 	const struct admin_state_code *state = vdo_get_admin_state_code(&slab->state);
 
 	if ((state == VDO_ADMIN_STATE_RECOVERING) || (state == VDO_ADMIN_STATE_SUSPENDING))
 		return;
 
 	if (state == VDO_ADMIN_STATE_SCRUBBING) {
-		if (vdo_must_load_ref_counts(slab->allocator->summary, slab->slab_number)) {
+		if (load) {
 			load_reference_blocks(ref_counts);
 			return;
 		}
 	} else if (state == VDO_ADMIN_STATE_SAVE_FOR_SCRUBBING) {
-		if (!vdo_must_load_ref_counts(slab->allocator->summary, slab->slab_number))
+		if (!load)
 			/* These reference counts were never written, so mark them all dirty. */
 			vdo_dirty_all_reference_blocks(ref_counts);
 
@@ -1557,8 +1534,8 @@ void vdo_drain_ref_counts(struct ref_counts *ref_counts)
 		 */
 		block_count_t data_blocks = slab->allocator->depot->slab_config.data_blocks;
 
-		if (vdo_must_load_ref_counts(slab->allocator->summary, slab->slab_number) ||
-		    (get_slab_free_block_count(slab) != data_blocks) ||
+		if (load ||
+		    (ref_counts->free_blocks != data_blocks) ||
 		    !vdo_is_slab_journal_blank(slab->journal)) {
 			vdo_dirty_all_reference_blocks(ref_counts);
 			save = true;

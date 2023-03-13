@@ -16,7 +16,6 @@
 #include "completion.h"
 #include "io-submitter.h"
 #include "logical-zone.h"
-#include "read-only-notifier.h"
 #include "slab-depot.h"
 #include "thread-config.h"
 #include "types.h"
@@ -78,7 +77,7 @@ static inline void assert_on_flusher_thread(struct flusher *flusher, const char 
  */
 static struct flusher *as_flusher(struct vdo_completion *completion)
 {
-	vdo_assert_completion_type(completion->type, VDO_FLUSH_NOTIFICATION_COMPLETION);
+	vdo_assert_completion_type(completion, VDO_FLUSH_NOTIFICATION_COMPLETION);
 	return container_of(completion, struct flusher, completion);
 }
 
@@ -90,7 +89,7 @@ static struct flusher *as_flusher(struct vdo_completion *completion)
  */
 static inline struct vdo_flush *completion_as_vdo_flush(struct vdo_completion *completion)
 {
-	vdo_assert_completion_type(completion->type, VDO_FLUSH_COMPLETION);
+	vdo_assert_completion_type(completion, VDO_FLUSH_COMPLETION);
 	return container_of(completion, struct vdo_flush, completion);
 }
 
@@ -279,7 +278,7 @@ static void flush_vdo(struct vdo_completion *completion)
 	assert_on_flusher_thread(flusher, __func__);
 	result = ASSERT(vdo_is_state_normal(&flusher->state), "flusher is in normal operation");
 	if (result != VDO_SUCCESS) {
-		vdo_enter_read_only_mode(flusher->vdo->read_only_notifier, result);
+		vdo_enter_read_only_mode(flusher->vdo, result);
 		vdo_complete_flush(flush);
 		return;
 	}

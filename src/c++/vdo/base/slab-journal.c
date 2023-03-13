@@ -18,7 +18,6 @@
 #include "recovery-journal.h"
 #include "ref-counts.h"
 #include "slab-depot.h"
-#include "slab-summary.h"
 #include "vdo.h"
 #include "vio.h"
 #include "wait-queue.h"
@@ -44,7 +43,7 @@ get_lock(struct slab_journal *journal, sequence_number_t sequence_number)
  */
 static inline bool __must_check is_vdo_read_only(struct slab_journal *journal)
 {
-	return vdo_is_read_only(journal->slab->allocator->read_only_notifier);
+	return vdo_is_read_only(journal->slab->allocator->depot->vdo);
 }
 
 /**
@@ -165,7 +164,6 @@ int vdo_make_slab_journal(struct block_allocator *allocator,
 	journal->full_entries_per_block = VDO_SLAB_JOURNAL_FULL_ENTRIES_PER_BLOCK;
 	journal->events = &allocator->slab_journal_statistics;
 	journal->recovery_journal = recovery_journal;
-	journal->summary = allocator->summary;
 	journal->tail = 1;
 	journal->head = 1;
 
@@ -311,7 +309,7 @@ void vdo_abort_slab_journal_waiters(struct slab_journal *journal)
  */
 static void enter_journal_read_only_mode(struct slab_journal *journal, int error_code)
 {
-	vdo_enter_read_only_mode(journal->slab->allocator->read_only_notifier, error_code);
+	vdo_enter_read_only_mode(journal->slab->allocator->depot->vdo, error_code);
 	vdo_abort_slab_journal_waiters(journal);
 }
 
@@ -517,11 +515,13 @@ static void update_tail_block_location(struct slab_journal *journal)
 		return;
 	}
 
-	if (slab->status != VDO_SLAB_REBUILT)
-		free_block_count =
-			vdo_get_summarized_free_block_count(journal->summary, slab->slab_number);
-	else
-		free_block_count = get_slab_free_block_count(slab);
+	if (slab->status != VDO_SLAB_REBUILT) {
+		u8 hint = slab->allocator->summary_entries[slab->slab_number].fullness_hint;
+
+		free_block_count = ((block_count_t) hint) << slab->allocator->depot->hint_shift;
+	} else {
+		free_block_count = slab->reference_counts->free_blocks;
+	}
 
 	journal->summarized = journal->next_commit;
 	journal->updating_slab_summary = true;
@@ -533,9 +533,8 @@ static void update_tail_block_location(struct slab_journal *journal)
 	 * loaded when the journal head has reaped past sequence number 1.
 	 */
 	block_offset = vdo_get_slab_journal_block_offset(journal, journal->summarized);
-	vdo_update_slab_summary_entry(journal->summary,
+	vdo_update_slab_summary_entry(slab,
 				      &journal->slab_summary_waiter,
-				      slab->slab_number,
 				      block_offset,
 				      (journal->head > 1),
 				      false,
@@ -1149,7 +1148,7 @@ void vdo_add_slab_journal_entry(struct slab_journal *journal,
 
 	enqueue_waiter(&journal->entry_waiters, &updater->waiter);
 	if ((slab->status != VDO_SLAB_REBUILT) && requires_reaping(journal))
-		vdo_register_slab_for_scrubbing(slab->allocator->slab_scrubber, slab, true);
+		vdo_register_slab_for_scrubbing(slab, true);
 
 	add_entries(journal);
 }
@@ -1252,6 +1251,20 @@ void vdo_drain_slab_journal(struct slab_journal *journal)
 	commit_tail(journal);
 }
 
+static void finish_journal_load(struct slab_journal *journal, int result)
+{
+	struct vdo_slab *slab = journal->slab;
+
+	if ((result == VDO_SUCCESS) && vdo_is_state_clean_load(&slab->state))
+		/*
+		 * Since this is a normal or new load, we don't need the memory to read and process
+		 * the recovery journal, so we can allocate reference counts now.
+		 */
+		result = vdo_allocate_ref_counts_for_slab(slab);
+
+	vdo_finish_loading_with_result(&slab->state, result);
+}
+
 /**
  * finish_decoding_journal() - Finish the decode process by returning the vio and notifying the
  *                             slab that we're done.
@@ -1264,7 +1277,7 @@ static void finish_decoding_journal(struct vdo_completion *completion)
 
 	return_vio_to_pool(journal->slab->allocator->vio_pool,
 			   vio_as_pooled_vio(as_vio(completion)));
-	vdo_notify_slab_journal_is_loaded(journal->slab, result);
+	finish_journal_load(journal, result);
 }
 
 /**
@@ -1294,7 +1307,7 @@ static void set_decoded_state(struct vdo_completion *completion)
 	 * If the slab is clean, this implies the slab journal is empty, so advance the head
 	 * appropriately.
 	 */
-	if (vdo_get_summarized_cleanliness(journal->summary, journal->slab->slab_number))
+	if (!journal->slab->allocator->summary_entries[journal->slab->slab_number].is_dirty)
 		journal->head = journal->tail;
 	else
 		journal->head = header.head;
@@ -1333,7 +1346,8 @@ static void read_slab_journal_tail(struct waiter *waiter, void *context)
 	struct pooled_vio *pooled = context;
 	struct vio *vio = &pooled->vio;
 	tail_block_offset_t last_commit_point =
-		vdo_get_summarized_tail_block_offset(journal->summary, slab->slab_number);
+		slab->allocator->summary_entries[slab->slab_number].tail_block_offset;
+
 	/*
 	 * Slab summary keeps the commit point offset, so the tail block is the block before that.
 	 * Calculation supports small journals in unit tests.
@@ -1360,13 +1374,12 @@ void vdo_decode_slab_journal(struct slab_journal *journal)
 	struct vdo_slab *slab = journal->slab;
 	tail_block_offset_t last_commit_point;
 
-	ASSERT_LOG_ONLY((vdo_get_callback_thread_id() == journal->slab->allocator->thread_id),
+	ASSERT_LOG_ONLY((vdo_get_callback_thread_id() == slab->allocator->thread_id),
 			"%s() called on correct thread",
 			__func__);
-	last_commit_point =
-		vdo_get_summarized_tail_block_offset(journal->summary, slab->slab_number);
+	last_commit_point = slab->allocator->summary_entries[slab->slab_number].tail_block_offset;
 	if ((last_commit_point == 0) &&
-	    !vdo_must_load_ref_counts(journal->summary, slab->slab_number)) {
+	    !slab->allocator->summary_entries[slab->slab_number].load_ref_counts) {
 		/*
 		 * This slab claims that it has a tail block at (journal->size - 1), but a head of
 		 * 1. This is impossible, due to the scrubbing threshold, on a real system, so
@@ -1375,7 +1388,7 @@ void vdo_decode_slab_journal(struct slab_journal *journal)
 		ASSERT_LOG_ONLY(((journal->size < 16) ||
 				 (journal->scrubbing_threshold < (journal->size - 1))),
 				"Scrubbing threshold protects against reads of unwritten slab journal blocks");
-		vdo_notify_slab_journal_is_loaded(slab, VDO_SUCCESS);
+		finish_journal_load(journal, VDO_SUCCESS);
 		return;
 	}
 

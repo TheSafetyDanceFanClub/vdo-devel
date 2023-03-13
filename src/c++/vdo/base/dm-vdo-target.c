@@ -4,10 +4,12 @@
  */
 
 #include <linux/atomic.h>
+#include <linux/bitops.h>
 #include <linux/completion.h>
 #include <linux/delay.h>
 #include <linux/device-mapper.h>
 #include <linux/module.h>
+#include <linux/mutex.h>
 #ifdef INTERNAL
 #include "linux/blkdev.h"
 #include <linux/fs.h>
@@ -23,17 +25,17 @@
 #include "dm-vdo/data-vio.h"
 #include "dm-vdo/dedupe.h"
 #include "dm-vdo/dump.h"
+#include "dm-vdo/encodings.h"
 #include "dm-vdo/errors.h"
 #include "dm-vdo/flush.h"
-#include "dm-vdo/instance-number.h"
 #include "dm-vdo/io-submitter.h"
 #include "dm-vdo/logger.h"
 #include "dm-vdo/memory-alloc.h"
 #include "dm-vdo/message-stats.h"
 #include "dm-vdo/pool-sysfs.h"
+#include "dm-vdo/recovery.h"
 #include "dm-vdo/recovery-journal.h"
 #include "dm-vdo/slab-depot.h"
-#include "dm-vdo/slab-summary.h"
 #include "dm-vdo/status-codes.h"
 #include "dm-vdo/string-utils.h"
 #include "dm-vdo/thread-config.h"
@@ -42,8 +44,6 @@
 #include "dm-vdo/types.h"
 #include "dm-vdo/uds-sysfs.h"
 #include "dm-vdo/vdo.h"
-#include "dm-vdo/vdo-component-states.h"
-#include "dm-vdo/vdo-recovery.h"
 #include "dm-vdo/vio.h"
 #else /* not __KERNEL__ */
 #include "admin-state.h"
@@ -52,24 +52,23 @@
 #include "constants.h"
 #include "data-vio.h"
 #include "dedupe.h"
+#include "dm-vdo-target.h"
 #include "dump.h"
+#include "encodings.h"
 #include "errors.h"
 #include "flush.h"
-#include "instance-number.h"
 #include "io-submitter.h"
 #include "logger.h"
 #include "memory-alloc.h"
 #include "message-stats.h"
+#include "recovery.h"
 #include "recovery-journal.h"
 #include "slab-depot.h"
-#include "slab-summary.h"
 #include "status-codes.h"
 #include "string-utils.h"
 #include "thread-config.h"
 #include "types.h"
 #include "vdo.h"
-#include "vdo-component-states.h"
-#include "vdo-recovery.h"
 #include "vio.h"
 #endif /* __KERNEL__ */
 
@@ -185,6 +184,35 @@ static const u8 REQUIRED_ARGC[] = { 10, 12, 9, 7, 6 };
 /* pool name no longer used. only here for verification of older versions */
 static const u8 POOL_NAME_ARG_INDEX[] = { 8, 10, 8 };
 
+/*
+ * Track in-use instance numbers using a flat bit array.
+ *
+ * O(n) run time isn't ideal, but if we have 1000 VDO devices in use simultaneously we still only
+ * need to scan 16 words, so it's not likely to be a big deal compared to other resource usage.
+ */
+
+enum {
+	/*
+	 * This minimum size for the bit array creates a numbering space of 0-999, which allows
+	 * successive starts of the same volume to have different instance numbers in any
+	 * reasonably-sized test. Changing instances on restart allows vdoMonReport to detect that
+	 * the ephemeral stats have reset to zero.
+	 */
+	BIT_COUNT_MINIMUM = 1000,
+	/** Grow the bit array by this many bits when needed */
+	BIT_COUNT_INCREMENT = 100,
+};
+
+struct instance_tracker {
+	struct mutex lock;
+	unsigned int bit_count;
+	unsigned long *words;
+	unsigned int count;
+	unsigned int next;
+};
+
+static struct instance_tracker instances;
+
 #ifndef __KERNEL__
 struct registered_thread {
 	int dummy;
@@ -206,6 +234,17 @@ static void uds_unregister_thread_device_id(void)
 
 static void uds_unregister_allocating_thread(void)
 {
+}
+
+void initialize_instance_number_tracking(void)
+{
+	memset(&instances, 0, sizeof(struct instance_tracker));
+}
+
+void clean_up_instance_number_tracking(void)
+{
+	UDS_FREE(instances.words);
+	initialize_instance_number_tracking();
 }
 
 #endif /* not __KERNEL__ */
@@ -1397,10 +1436,9 @@ static void finish_operation_callback(struct vdo_completion *completion)
 static int __must_check decode_from_super_block(struct vdo *vdo)
 {
 	const struct device_config *config = vdo->device_config;
-	struct super_block_codec *codec = vdo_get_super_block_codec(vdo->super_block);
 	int result;
 
-	result = vdo_decode_component_states(codec->component_buffer,
+	result = vdo_decode_component_states(vdo->super_block.codec.component_buffer,
 					     vdo->geometry.release_version,
 					     &vdo->states);
 	if (result != VDO_SUCCESS)
@@ -1466,13 +1504,6 @@ static int __must_check decode_vdo(struct vdo *vdo)
 		return uds_log_error_strerror(VDO_BAD_CONFIGURATION,
 					      "maximum age must be greater than 0");
 
-	result = vdo_make_read_only_notifier(vdo_in_read_only_mode(vdo),
-					     thread_config,
-					     vdo,
-					     &vdo->read_only_notifier);
-	if (result != VDO_SUCCESS)
-		return result;
-
 	result = vdo_enable_read_only_entry(vdo);
 	if (result != VDO_SUCCESS)
 		return result;
@@ -1484,7 +1515,6 @@ static int __must_check decode_vdo(struct vdo *vdo)
 							       VDO_RECOVERY_JOURNAL_PARTITION),
 					     vdo->states.vdo.complete_recoveries,
 					     vdo->states.vdo.config.recovery_journal_size,
-					     vdo->read_only_notifier,
 					     thread_config,
 					     &vdo->recovery_journal);
 	if (result != VDO_SUCCESS)
@@ -1501,7 +1531,6 @@ static int __must_check decode_vdo(struct vdo *vdo)
 				      vdo->states.vdo.config.logical_blocks,
 				      thread_config,
 				      vdo,
-				      vdo->read_only_notifier,
 				      vdo->recovery_journal,
 				      vdo->states.vdo.nonce,
 				      vdo->device_config->cache_size,
@@ -1541,10 +1570,7 @@ static void pre_load_callback(struct vdo_completion *completion)
 			return;
 		}
 
-		vdo_load_super_block(vdo,
-				     completion,
-				     vdo_get_data_region_start(vdo->geometry),
-				     &vdo->super_block);
+		vdo_load_super_block(vdo, completion);
 		return;
 
 	case PRE_LOAD_PHASE_LOAD_COMPONENTS:
@@ -1559,6 +1585,23 @@ static void pre_load_callback(struct vdo_completion *completion)
 	}
 
 	finish_operation_callback(completion);
+}
+
+EXTERNAL_STATIC void release_instance(unsigned int instance)
+{
+	mutex_lock(&instances.lock);
+	if (instance >= instances.bit_count) {
+		ASSERT_LOG_ONLY(false,
+				"instance number %u must be less than bit count %u",
+				instance,
+				instances.bit_count);
+	} else if (test_bit(instance, instances.words) == 0) {
+		ASSERT_LOG_ONLY(false, "instance number %u must be allocated", instance);
+	} else {
+		__clear_bit(instance, instances.words);
+		instances.count -= 1;
+	}
+	mutex_unlock(&instances.lock);
 }
 
 static void set_device_config(struct dm_target *ti, struct vdo *vdo, struct device_config *config)
@@ -1595,7 +1638,6 @@ vdo_initialize(struct dm_target *ti, unsigned int instance, struct device_config
 	if (vdo != NULL) {
 		uds_log_error("Existing vdo already uses device %s",
 			      vdo->device_config->parent_device_name);
-		vdo_release_instance(instance);
 		ti->error = "Cannot share storage device with already-running VDO";
 		return VDO_BAD_CONFIGURATION;
 	}
@@ -1639,6 +1681,90 @@ static bool __must_check vdo_is_named(struct vdo *vdo, const void *context)
 	return strcmp(device_name, (const char *) context) == 0;
 }
 
+/**
+ * get_bit_array_size() - Return the number of bytes needed to store a bit array of the specified
+ *                        capacity in an array of unsigned longs.
+ * @bit_count: The number of bits the array must hold.
+ *
+ * Return: the number of bytes needed for the array representation.
+ */
+static size_t get_bit_array_size(unsigned int bit_count)
+{
+	/* Round up to a multiple of the word size and convert to a byte count. */
+	return (BITS_TO_LONGS(bit_count) * sizeof(unsigned long));
+}
+
+/**
+ * grow_bit_array() - Re-allocate the bitmap word array so there will more instance numbers that
+ *                    can be allocated.
+ *
+ * Since the array is initially NULL, this also initializes the array the first time we allocate an
+ * instance number.
+ *
+ * Return: UDS_SUCCESS or an error code from the allocation
+ */
+static int grow_bit_array(void)
+{
+	unsigned int new_count =
+		max(instances.bit_count + BIT_COUNT_INCREMENT, (unsigned int) BIT_COUNT_MINIMUM);
+	unsigned long *new_words;
+	int result;
+
+	result = uds_reallocate_memory(instances.words,
+				       get_bit_array_size(instances.bit_count),
+				       get_bit_array_size(new_count),
+				       "instance number bit array",
+				       &new_words);
+	if (result != UDS_SUCCESS)
+		return result;
+
+	instances.bit_count = new_count;
+	instances.words = new_words;
+	return UDS_SUCCESS;
+}
+
+/**
+ * allocate_instance() - Allocate an instance number.
+ * @instance_ptr: A point to hold the instance number
+ *
+ * Return: UDS_SUCCESS or an error code
+ *
+ * This function must be called while holding the instances lock.
+ */
+EXTERNAL_STATIC int allocate_instance(unsigned int *instance_ptr)
+{
+	unsigned int instance;
+	int result;
+
+	/* If there are no unallocated instances, grow the bit array. */
+	if (instances.count >= instances.bit_count) {
+		result = grow_bit_array();
+		if (result != UDS_SUCCESS)
+			return result;
+	}
+
+	/*
+	 * There must be a zero bit somewhere now. Find it, starting just after the last instance
+	 * allocated.
+	 */
+	instance = find_next_zero_bit(instances.words,
+				      instances.bit_count,
+				      instances.next);
+	if (instance >= instances.bit_count) {
+		/* Nothing free after next, so wrap around to instance zero. */
+		instance = find_first_zero_bit(instances.words, instances.bit_count);
+		result = ASSERT(instance < instances.bit_count, "impossibly, no zero bit found");
+		if (result != UDS_SUCCESS)
+			return result;
+	}
+
+	__set_bit(instance, instances.words);
+	instances.count++;
+	instances.next = instance + 1;
+	*instance_ptr = instance;
+	return UDS_SUCCESS;
+}
+
 static int construct_new_vdo_registered(struct dm_target *ti,
 					unsigned int argc,
 					char **argv,
@@ -1650,13 +1776,14 @@ static int construct_new_vdo_registered(struct dm_target *ti,
 	result = parse_device_config(argc, argv, ti, &config);
 	if (result != VDO_SUCCESS) {
 		uds_log_error_strerror(result, "parsing failed: %s", ti->error);
-		vdo_release_instance(instance);
+		release_instance(instance);
 		return -EINVAL;
 	}
 
 	/* Beyond this point, the instance number will be cleaned up for us if needed */
 	result = vdo_initialize(ti, instance, config);
 	if (result != VDO_SUCCESS) {
+		release_instance(instance);
 		free_device_config(config);
 		return vdo_map_to_system_error(result);
 	}
@@ -1670,7 +1797,9 @@ static int construct_new_vdo(struct dm_target *ti, unsigned int argc, char **arg
 	unsigned int instance;
 	struct registered_thread instance_thread;
 
-	result = vdo_allocate_instance(&instance);
+	mutex_lock(&instances.lock);
+	result = allocate_instance(&instance);
+	mutex_unlock(&instances.lock);
 	if (result != VDO_SUCCESS)
 		return -ENOMEM;
 
@@ -1692,7 +1821,7 @@ static void check_may_grow_physical(struct vdo_completion *completion)
 	assert_admin_phase_thread(vdo, __func__);
 
 	/* These checks can only be done from a vdo thread. */
-	if (vdo_is_read_only(vdo->read_only_notifier))
+	if (vdo_is_read_only(vdo))
 		vdo_set_completion_result(completion, VDO_READ_ONLY);
 
 	if (vdo_in_recovery_mode(vdo))
@@ -1925,6 +2054,7 @@ static void vdo_dtr(struct dm_target *ti)
 		uds_log_info("device '%s' stopped", device_name);
 		uds_unregister_thread_device_id();
 		uds_unregister_allocating_thread();
+		release_instance(instance);
 	} else if (config == vdo->device_config) {
 		/*
 		 * The VDO still references this config. Give it a reference to a config that isn't
@@ -2029,7 +2159,7 @@ static void suspend_callback(struct vdo_completion *completion)
 		 */
 		result = vdo_synchronous_flush(vdo);
 		if (result != VDO_SUCCESS)
-			vdo_enter_read_only_mode(vdo->read_only_notifier, result);
+			vdo_enter_read_only_mode(vdo, result);
 
 		vdo_drain_logical_zones(vdo->logical_zones,
 					vdo_get_admin_state_code(state),
@@ -2055,7 +2185,7 @@ static void suspend_callback(struct vdo_completion *completion)
 		return;
 
 	case SUSPEND_PHASE_READ_ONLY_WAIT:
-		vdo_wait_until_not_entering_read_only_mode(vdo->read_only_notifier, completion);
+		vdo_wait_until_not_entering_read_only_mode(completion);
 		return;
 
 	case SUSPEND_PHASE_WRITE_SUPER_BLOCK:
@@ -2237,7 +2367,7 @@ static void load_callback(struct vdo_completion *completion)
 
 		/* Prepare the recovery journal for new entries. */
 		vdo_open_recovery_journal(vdo->recovery_journal, vdo->depot, vdo->block_map);
-		vdo_allow_read_only_mode_entry(vdo->read_only_notifier, completion);
+		vdo_allow_read_only_mode_entry(completion);
 		return;
 
 	case LOAD_PHASE_STATS:
@@ -2245,7 +2375,7 @@ static void load_callback(struct vdo_completion *completion)
 		return;
 
 	case LOAD_PHASE_LOAD_DEPOT:
-		if (vdo_is_read_only(vdo->read_only_notifier)) {
+		if (vdo_is_read_only(vdo)) {
 			/*
 			 * In read-only mode we don't use the allocator and it may not even be
 			 * readable, so don't bother trying to load it.
@@ -2309,7 +2439,7 @@ static void load_callback(struct vdo_completion *completion)
 		/* Avoid an infinite loop */
 		completion->error_handler = NULL;
 		vdo->admin.phase = LOAD_PHASE_FINISHED;
-		vdo_wait_until_not_entering_read_only_mode(vdo->read_only_notifier, completion);
+		vdo_wait_until_not_entering_read_only_mode(completion);
 		return;
 
 	default:
@@ -2346,7 +2476,7 @@ static void handle_load_error(struct vdo_completion *completion)
 
 	uds_log_error_strerror(completion->result, "Entering read-only mode due to load error");
 	vdo->admin.phase = LOAD_PHASE_WAIT_FOR_READ_ONLY;
-	vdo_enter_read_only_mode(vdo->read_only_notifier, completion->result);
+	vdo_enter_read_only_mode(vdo, completion->result);
 	completion->result = VDO_READ_ONLY;
 	load_callback(completion);
 }
@@ -2404,7 +2534,7 @@ static void resume_callback(struct vdo_completion *completion)
 		return;
 
 	case RESUME_PHASE_ALLOW_READ_ONLY_MODE:
-		vdo_allow_read_only_mode_entry(vdo->read_only_notifier, completion);
+		vdo_allow_read_only_mode_entry(completion);
 		return;
 
 	case RESUME_PHASE_DEDUPE:
@@ -2473,7 +2603,7 @@ static void grow_logical_callback(struct vdo_completion *completion)
 
 	switch (advance_phase(vdo)) {
 	case GROW_LOGICAL_PHASE_START:
-		if (vdo_is_read_only(vdo->read_only_notifier)) {
+		if (vdo_is_read_only(vdo)) {
 			uds_log_error_strerror(VDO_READ_ONLY,
 					       "Can't grow logical size of a read-only VDO");
 			vdo_set_completion_result(completion, VDO_READ_ONLY);
@@ -2499,7 +2629,7 @@ static void grow_logical_callback(struct vdo_completion *completion)
 		break;
 
 	case GROW_LOGICAL_PHASE_ERROR:
-		vdo_enter_read_only_mode(vdo->read_only_notifier, completion->result);
+		vdo_enter_read_only_mode(vdo, completion->result);
 		break;
 
 	default:
@@ -2584,7 +2714,7 @@ static void grow_physical_callback(struct vdo_completion *completion)
 
 	switch (advance_phase(vdo)) {
 	case GROW_PHYSICAL_PHASE_START:
-		if (vdo_is_read_only(vdo->read_only_notifier)) {
+		if (vdo_is_read_only(vdo)) {
 			uds_log_error_strerror(VDO_READ_ONLY,
 					       "Can't grow physical size of a read-only VDO");
 			vdo_set_completion_result(completion, VDO_READ_ONLY);
@@ -2617,7 +2747,7 @@ static void grow_physical_callback(struct vdo_completion *completion)
 		return;
 
 	case GROW_PHYSICAL_PHASE_END:
-		vdo_set_slab_summary_origin(vdo->depot->slab_summary,
+		vdo_set_slab_summary_origin(vdo->depot,
 					    vdo_get_partition(vdo->layout,
 							      VDO_SLAB_SUMMARY_PARTITION));
 		vdo_set_recovery_journal_partition(vdo->recovery_journal,
@@ -2626,7 +2756,7 @@ static void grow_physical_callback(struct vdo_completion *completion)
 		break;
 
 	case GROW_PHYSICAL_PHASE_ERROR:
-		vdo_enter_read_only_mode(vdo->read_only_notifier, completion->result);
+		vdo_enter_read_only_mode(vdo, completion->result);
 		break;
 
 	default:
@@ -2796,7 +2926,7 @@ static int vdo_preresume_registered(struct dm_target *ti, struct vdo *vdo)
 		uds_log_error_strerror(result,
 				       "Commit of modifications to device '%s' failed",
 				       device_name);
-		vdo_enter_read_only_mode(vdo->read_only_notifier, result);
+		vdo_enter_read_only_mode(vdo, result);
 		return result;
 	}
 
@@ -2884,7 +3014,12 @@ static void vdo_module_destroy(void)
 	if (dm_registered)
 		dm_unregister_target(&vdo_target_bio);
 
-	vdo_clean_up_instance_number_tracking();
+	ASSERT_LOG_ONLY(instances.count == 0,
+			"should have no instance numbers still in use, but have %u",
+			instances.count);
+	UDS_FREE(instances.words);
+	mutex_destroy(&instances.lock);
+	memset(&instances, 0, sizeof(struct instance_tracker));
 
 	uds_log_info("unloaded version %s", CURRENT_VERSION);
 }
@@ -2921,7 +3056,7 @@ static int __init vdo_init(void)
 	}
 	dm_registered = true;
 
-	vdo_initialize_instance_number_tracking();
+	mutex_init(&instances.lock);
 
 	return result;
 }

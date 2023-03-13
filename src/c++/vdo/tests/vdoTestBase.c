@@ -20,14 +20,13 @@
 #include "admin-state.h"
 #include "block-map.h"
 #include "completionUtils.h"
+#include "encodings.h"
 #include "recovery-journal.h"
 #include "slab-depot.h"
 #include "slab.h"
 #include "status-codes.h"
 #include "status-codes.h"
-#include "super-block.h"
 #include "types.h"
-#include "vdo-component-states.h"
 #include "vdo.h"
 #include "volume-geometry.h"
 
@@ -403,7 +402,7 @@ void checkVDOState(enum vdo_state expectedState)
 /**********************************************************************/
 static void assertReadOnlyAction(struct vdo_completion *completion)
 {
-  CU_ASSERT(vdo_is_read_only(vdo->read_only_notifier));
+  CU_ASSERT(vdo_is_read_only(vdo));
   vdo_complete_completion(completion);
 }
 
@@ -417,9 +416,8 @@ void verifyReadOnly(void)
 /**********************************************************************/
 static void forceReadOnlyMode(struct vdo_completion *completion)
 {
-  vdo_enter_read_only_mode(vdo->read_only_notifier, VDO_READ_ONLY);
-  vdo_wait_until_not_entering_read_only_mode(vdo->read_only_notifier,
-                                             completion);
+  vdo_enter_read_only_mode(vdo, VDO_READ_ONLY);
+  vdo_wait_until_not_entering_read_only_mode(completion);
   setStartStopExpectation(VDO_READ_ONLY);
 }
 

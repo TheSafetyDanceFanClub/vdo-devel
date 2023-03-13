@@ -3,6 +3,7 @@
  * Copyright Red Hat
  */
 
+#include <linux/bitops.h>
 #include <linux/bits.h>
 #include <linux/random.h>
 
@@ -15,6 +16,10 @@
 
 static const unsigned int MEAN_DELTA = 4096;
 static const unsigned int NUM_PAYLOAD_BITS = 10;
+
+enum {
+  GUARD_BITS = (sizeof(uint64_t) - 1) * BITS_PER_BYTE,
+};
 
 /* Read a bit field from an arbitrary bit boundary. */
 static inline unsigned int
@@ -120,32 +125,37 @@ static void setupDeltaList(struct delta_list *pdl, int index,
  **/
 static void testExtend(struct delta_list *pdl, int numLists, int initialValue)
 {
-  struct delta_zone *dm, *random;
-  int initSize
-    = (pdl[numLists + 1].start + pdl[numLists + 1].size) / BITS_PER_BYTE;
+  struct delta_index *delta_index;
+  u8 *random;
+  int initSize = (pdl[numLists + 1].start + pdl[numLists + 1].size) / BITS_PER_BYTE;
   size_t pdlSize = (numLists + 2) * sizeof(struct delta_list);
 
   // Get some random bits
-  UDS_ASSERT_SUCCESS(UDS_ALLOCATE(1, struct delta_zone, __func__, &random));
-  UDS_ASSERT_SUCCESS(initialize_delta_zone(random, initSize, 0, numLists,
-                                           MEAN_DELTA, NUM_PAYLOAD_BITS));
-  get_random_bytes(random->memory, random->size);
+  uint64_t bitsNeeded = 0;
+  int i;
+  for (i = 1; i <= numLists; i++) {
+    bitsNeeded += pdl[i].size;
+  }
+
+  // move_bits() can read up to seven bytes beyond the bytes it needs.
+  uint64_t bytesNeeded = BITS_TO_BYTES(bitsNeeded + GUARD_BITS);
+  UDS_ASSERT_SUCCESS(UDS_ALLOCATE(bytesNeeded, u8, __func__, &random));
+  get_random_bytes(random, bytesNeeded);
 
   // Get the delta memory corresponding to the delta lists
-  UDS_ASSERT_SUCCESS(UDS_ALLOCATE(1, struct delta_zone, __func__, &dm));
-  UDS_ASSERT_SUCCESS(initialize_delta_zone(dm, initSize, 0, numLists,
-                                           MEAN_DELTA, NUM_PAYLOAD_BITS));
+  UDS_ASSERT_SUCCESS(UDS_ALLOCATE(1, struct delta_index, __func__, &delta_index));
+  UDS_ASSERT_SUCCESS(initialize_delta_index(delta_index, 1, numLists, MEAN_DELTA,
+                                            NUM_PAYLOAD_BITS, initSize, 'm'));
+  struct delta_zone *dm = &delta_index->delta_zones[0];
   memset(dm->memory, initialValue, dm->size);
   memcpy(dm->delta_lists, pdl, pdlSize);
   validateDeltaLists(dm);
 
   // Copy the random bits into the delta lists
   uint64_t randomOffset = 0;
-  int i;
   for (i = 1; i <= numLists; i++) {
     unsigned int size = dm->delta_lists[i].size;
-    move_bits(random->memory, randomOffset, dm->memory,
-              dm->delta_lists[i].start, size);
+    move_bits(random, randomOffset, dm->memory, dm->delta_lists[i].start, size);
     randomOffset += size;
   }
 
@@ -158,14 +168,12 @@ static void testExtend(struct delta_list *pdl, int numLists, int initialValue)
   randomOffset = 0;
   for (i = 1; i <= numLists; i++) {
     unsigned int size = dm->delta_lists[i].size;
-    CU_ASSERT_TRUE(sameBits(random->memory, randomOffset, dm->memory,
-                            dm->delta_lists[i].start, size));
+    CU_ASSERT_TRUE(sameBits(random, randomOffset, dm->memory, dm->delta_lists[i].start, size));
     randomOffset += size;
   }
 
-  uninitialize_delta_zone(dm);
-  uninitialize_delta_zone(random);
-  UDS_FREE(dm);
+  uninitialize_delta_index(delta_index);
+  UDS_FREE(delta_index);
   UDS_FREE(random);
 }
 
@@ -179,15 +187,15 @@ static void testExtend(struct delta_list *pdl, int numLists, int initialValue)
 static void guardAndTest(struct delta_list *pdl, int numLists,
                          unsigned int gapSize)
 {
-  enum { GUARD_BITS = (sizeof(uint64_t) - 1) * BITS_PER_BYTE };
   struct delta_list *deltaListsCopy;
-  UDS_ASSERT_SUCCESS(UDS_ALLOCATE(numLists + 2, struct delta_list, __func__,
-                                  &deltaListsCopy));
+  UDS_ASSERT_SUCCESS(UDS_ALLOCATE(numLists + 2, struct delta_list, __func__, &deltaListsCopy));
 
-  // Set the tail guard list, which starts and ends on a byte boundary
-  pdl[numLists + 1].start
-    = ((pdl[numLists].start + pdl[numLists].size + gapSize + BITS_PER_BYTE - 1)
-       & (-BITS_PER_BYTE));
+  // Set the tail guard list, which ends on a 64K boundary
+  uint32_t bitsNeeded = pdl[numLists].start + pdl[numLists].size + gapSize + GUARD_BITS;
+  uint32_t increment = 64 * KILOBYTE * BITS_PER_BYTE;
+  uint32_t bitsUsed = DIV_ROUND_UP(bitsNeeded, increment) * increment;
+
+  pdl[numLists + 1].start = bitsUsed - GUARD_BITS;
   pdl[numLists + 1].size = GUARD_BITS;
 
   memcpy(deltaListsCopy, pdl, (numLists + 2) * sizeof(struct delta_list));

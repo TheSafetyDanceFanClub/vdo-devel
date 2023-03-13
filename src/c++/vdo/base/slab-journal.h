@@ -3,20 +3,18 @@
  * Copyright Red Hat
  */
 
-#ifndef SLAB_JOURNAL_H
-#define SLAB_JOURNAL_H
+#ifndef VDO_SLAB_JOURNAL_H
+#define VDO_SLAB_JOURNAL_H
 
 #include <linux/list.h>
 
 #include "numeric.h"
 
 #include "data-vio.h"
+#include "encodings.h"
 #include "slab.h"
-#include "slab-depot.h"
-#include "slab-summary.h"
 #include "statistics.h"
 #include "types.h"
-#include "vdo-component-states.h"
 #include "wait-queue.h"
 
 struct journal_lock {
@@ -75,8 +73,6 @@ struct slab_journal {
 	/* The recovery journal of the VDO (slab journal holds locks on it) */
 	struct recovery_journal *recovery_journal;
 
-	/* The slab summary to update tail block location */
-	struct slab_summary_zone *summary;
 	/* The statistics shared by all slab journals in our physical zone */
 	struct slab_journal_statistics *events;
 	/* A list of the VIO pool entries for outstanding journal block writes */
@@ -213,4 +209,4 @@ void vdo_encode_slab_journal_entry(struct slab_journal_block_header *tail_header
 				   bool increment);
 bool __must_check vdo_is_slab_journal_dirty(const struct slab_journal *journal);
 #endif
-#endif /* SLAB_JOURNAL_H */
+#endif /* VDO_SLAB_JOURNAL_H */

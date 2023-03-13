@@ -13,13 +13,12 @@
 #include "completion.h"
 #include "constants.h"
 #include "data-vio.h"
+#include "encodings.h"
 #include "physical-zone.h"
 #include "recovery-journal.h"
 #include "ref-counts.h"
 #include "slab-depot.h"
 #include "slab-journal.h"
-#include "slab-summary.h"
-#include "vdo-component-states.h"
 
 /**
  * vdo_make_slab() - Construct a new, empty slab.
@@ -98,11 +97,7 @@ int vdo_allocate_ref_counts_for_slab(struct vdo_slab *slab)
 	if (result != VDO_SUCCESS)
 		return result;
 
-	return vdo_make_ref_counts(slab_config->data_blocks,
-				   slab,
-				   slab->ref_counts_origin,
-				   slab->allocator->read_only_notifier,
-				   &slab->reference_counts);
+	return vdo_make_ref_counts(slab_config->data_blocks, slab, &slab->reference_counts);
 }
 
 /**
@@ -118,17 +113,6 @@ void vdo_free_slab(struct vdo_slab *slab)
 	vdo_free_slab_journal(UDS_FORGET(slab->journal));
 	vdo_free_ref_counts(UDS_FORGET(slab->reference_counts));
 	UDS_FREE(slab);
-}
-
-/**
- * get_slab_free_block_count() - Get the current number of free blocks in a slab.
- * @slab: The slab to query.
- *
- * Return: The number of free blocks in the slab.
- */
-block_count_t get_slab_free_block_count(const struct vdo_slab *slab)
-{
-	return vdo_get_unreferenced_block_count(slab->reference_counts);
 }
 
 /**
@@ -158,74 +142,6 @@ int vdo_slab_block_number_from_pbn(struct vdo_slab *slab,
 }
 
 /**
- * initiate_slab_action() - Initiate a slab action.
- *
- * Implements vdo_admin_initiator.
- */
-static void initiate_slab_action(struct admin_state *state)
-{
-	struct vdo_slab *slab = container_of(state, struct vdo_slab, state);
-
-	if (vdo_is_state_draining(state)) {
-		const struct admin_state_code *operation = vdo_get_admin_state_code(state);
-
-		if (operation == VDO_ADMIN_STATE_SCRUBBING)
-			slab->status = VDO_SLAB_REBUILDING;
-
-		vdo_drain_slab_journal(slab->journal);
-
-		if (slab->reference_counts != NULL)
-			vdo_drain_ref_counts(slab->reference_counts);
-
-		vdo_check_if_slab_drained(slab);
-		return;
-	}
-
-	if (vdo_is_state_loading(state)) {
-		vdo_decode_slab_journal(slab->journal);
-		return;
-	}
-
-	if (vdo_is_state_resuming(state)) {
-		vdo_queue_slab(slab);
-		vdo_finish_resuming(state);
-		return;
-	}
-
-	vdo_finish_operation(state, VDO_INVALID_ADMIN_STATE);
-}
-
-/**
- * vdo_start_slab_action() - Start an administrative operation on a slab.
- * @slab: The slab to load.
- * @operation: The type of load to perform.
- * @parent: The object to notify when the operation is complete.
- */
-void vdo_start_slab_action(struct vdo_slab *slab,
-			   const struct admin_state_code *operation,
-			   struct vdo_completion *parent)
-{
-	vdo_start_operation_with_waiter(&slab->state, operation, parent, initiate_slab_action);
-}
-
-/**
- * vdo_notify_slab_journal_is_loaded() - Inform a slab that its journal has been loaded.
- * @slab: The slab whose journal has been loaded.
- * @result: The result of the load operation.
- */
-void vdo_notify_slab_journal_is_loaded(struct vdo_slab *slab, int result)
-{
-	if ((result == VDO_SUCCESS) && vdo_is_state_clean_load(&slab->state))
-		/*
-		 * Since this is a normal or new load, we don't need the memory to read and process
-		 * the recovery journal, so we can allocate reference counts now.
-		 */
-		result = vdo_allocate_ref_counts_for_slab(slab);
-
-	vdo_finish_loading_with_result(&slab->state, result);
-}
-
-/**
  * vdo_is_slab_open() - Check whether a slab is open, i.e. is neither quiescent nor quiescing.
  * @slab: The slab to check.
  *
@@ -251,6 +167,6 @@ void vdo_check_if_slab_drained(struct vdo_slab *slab)
 	if ((slab->reference_counts != NULL) && vdo_are_ref_counts_active(slab->reference_counts))
 		return;
 
-	read_only = vdo_is_read_only(slab->allocator->read_only_notifier);
+	read_only = vdo_is_read_only(slab->allocator->depot->vdo);
 	vdo_finish_draining_with_result(&slab->state, (read_only ? VDO_READ_ONLY : VDO_SUCCESS));
 }

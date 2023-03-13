@@ -3,16 +3,16 @@
  * Copyright Red Hat
  */
 
-#ifndef PACKER_H
-#define PACKER_H
+#ifndef VDO_PACKER_H
+#define VDO_PACKER_H
 
 #include <linux/list.h>
 
 #include "admin-state.h"
 #include "constants.h"
+#include "encodings.h"
 #include "statistics.h"
 #include "types.h"
-#include "vdo-component-states.h"
 #include "wait-queue.h"
 
 enum {
@@ -130,4 +130,4 @@ block_size_t __must_check pack_fragment(struct compression_state *compression,
 					slot_number_t slot,
 					struct compressed_block *block);
 #endif /* INTERNAL */
-#endif /* PACKER_H */
+#endif /* VDO_PACKER_H */

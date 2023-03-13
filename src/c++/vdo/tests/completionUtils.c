@@ -31,7 +31,7 @@ typedef struct wrappingCompletion {
 static inline WrappingCompletion *
 asWrappingCompletion(struct vdo_completion *completion)
 {
-  vdo_assert_completion_type(completion->type, VDO_WRAPPING_COMPLETION);
+  vdo_assert_completion_type(completion, VDO_WRAPPING_COMPLETION);
   return container_of(completion, WrappingCompletion, completion);
 }
 
@@ -136,4 +136,14 @@ int performWrappedAction(vdo_action            *action,
   struct vdo_completion *wrapper;
   launchWrappedAction(action, completion, &wrapper);
   return awaitWrappedCompletion(wrapper);
+}
+
+/**
+ * Finish a completion's parent with the result of the completion.
+ *
+ * Implements vdo_action.
+ **/
+void finishParentCallback(struct vdo_completion *completion)
+{
+  vdo_finish_completion(completion->parent, completion->result);
 }

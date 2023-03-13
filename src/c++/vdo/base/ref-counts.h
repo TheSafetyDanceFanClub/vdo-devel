@@ -5,9 +5,9 @@
 #ifndef REF_COUNTS_H
 #define REF_COUNTS_H
 
+#include "encodings.h"
 #include "slab.h"
 #include "types.h"
-#include "vdo-component-states.h"
 #include "wait-queue.h"
 
 /*
@@ -90,12 +90,6 @@ struct ref_counts {
 	/* Whether slab summary update is in progress */
 	bool updating_slab_summary;
 
-	/* The notifier for read-only mode */
-	struct read_only_notifier *read_only_notifier;
-	/* The refcount statistics, shared by all refcounts in our physical zone */
-	struct ref_counts_statistics *statistics;
-	/* The layer PBN for the first struct reference_block */
-	physical_block_number_t origin;
 	/* The latest slab journal entry this ref_counts has been updated with */
 	struct journal_point slab_journal_point;
 
@@ -108,8 +102,6 @@ struct ref_counts {
 int __must_check
 vdo_make_ref_counts(block_count_t block_count,
 		    struct vdo_slab *slab,
-		    physical_block_number_t origin,
-		    struct read_only_notifier *read_only_notifier,
 		    struct ref_counts **ref_counts_ptr);
 
 void vdo_free_ref_counts(struct ref_counts *ref_counts);
@@ -117,8 +109,6 @@ void vdo_free_ref_counts(struct ref_counts *ref_counts);
 bool __must_check vdo_are_ref_counts_active(struct ref_counts *ref_counts);
 
 void vdo_reset_search_cursor(struct ref_counts *ref_counts);
-
-block_count_t __must_check vdo_get_unreferenced_block_count(struct ref_counts *ref_counts);
 
 u8 __must_check
 vdo_get_available_references(struct ref_counts *ref_counts, physical_block_number_t pbn);

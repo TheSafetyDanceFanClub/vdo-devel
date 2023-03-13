@@ -49,7 +49,8 @@ int make_open_chapter_index(struct open_chapter_index **chapter_index,
 					geometry->delta_lists_per_chapter,
 					geometry->chapter_mean_delta,
 					geometry->chapter_payload_bits,
-					memory_size);
+					memory_size,
+					'm');
 	if (result != UDS_SUCCESS) {
 		UDS_FREE(index);
 		return result;
@@ -87,7 +88,7 @@ void empty_open_chapter_index(struct open_chapter_index *chapter_index, u64 virt
 	get_delta_index_stats(&chapter_index->delta_index, &delta_index_stats);
 	long before_discard_count = delta_index_stats.discard_count;
 #endif /* TEST_INTERNAL */
-	empty_delta_index(&chapter_index->delta_index);
+	reset_delta_index(&chapter_index->delta_index);
 	chapter_index->virtual_chapter_number = virtual_chapter_number;
 #ifdef TEST_INTERNAL
 	get_delta_index_stats(&chapter_index->delta_index, &delta_index_stats);
