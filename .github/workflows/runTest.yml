@@ -1,0 +1,16 @@
+name: Add untested label
+on:
+  pull_request_review:
+    types: [submitted]
+    branches: [ main ]
+
+jobs:
+  approved:
+    if: github.event.review.state == 'approved'
+    runs-on: self-hosted
+    steps:
+      - name: step 1
+        run: echo "This PR was approved Step 1"
+        
+      - name: step 2
+        run: echo ${{ github.event.issue.number }}
