@@ -42,11 +42,16 @@ jobs:
           rm -f perl/Permabit/P4.pm
           make
         
-      - name: Run Tests (make jenkins)
+      - name: Run common Tests (make jenkins)
         run: |
           cd common
           make jenkins
           
+      - name: Run vdo-devel Tests (make jenkins)
+        run: |
+          cd vdo-devel
+          make jenkins
+      
       # Details for this step can be found here: https://github.com/marketplace/actions/publish-unit-test-results#support-fork-repositories-and-dependabot-branches    
       - name: Publish Unit Test Results
         uses: EnricoMi/publish-unit-test-result-action/composite@v1
