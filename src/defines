@@ -17,6 +17,7 @@ TOOLS_DIR     = $(SRC_DIR)/tools
 PACKAGING_DIR = $(SRC_DIR)/packaging
 KPATCH_DIR    = $(PACKAGING_DIR)/kpatch
 
+
 KERNEL_SOURCE_DIR ?= /lib/modules/$(shell uname -r)/build
 
 # Current version file
