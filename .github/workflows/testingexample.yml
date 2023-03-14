@@ -49,7 +49,6 @@ jobs:
           
       - name: Run vdo-devel Tests (make jenkins)
         run: |
-          cd vdo-devel
           make jenkins
       
       # Details for this step can be found here: https://github.com/marketplace/actions/publish-unit-test-results#support-fork-repositories-and-dependabot-branches    
