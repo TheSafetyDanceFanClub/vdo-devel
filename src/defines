@@ -19,6 +19,7 @@ KPATCH_DIR    = $(PACKAGING_DIR)/kpatch
 
 KERNEL_SOURCE_DIR ?= /lib/modules/$(shell uname -r)/build
 
+
 # Current version file
 CURRENT_VERSION_FILE = $(TOOLS_DIR)/installers/CURRENT_VERSION
 
