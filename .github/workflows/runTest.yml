@@ -1,4 +1,4 @@
-name: Add untested label
+name: Run Test
 on:
   pull_request_review:
     types: [submitted]
