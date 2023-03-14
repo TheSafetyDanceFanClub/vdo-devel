@@ -1,0 +1,19 @@
+name: Test Labelling a pull request
+on:
+  pull_request_target:
+    types: [labelled]
+    branches: [ main ]
+
+jobs:
+  approved:
+    if: github.event.label.name == 'approved'
+    steps:
+      - name: step 1
+        run: echo "This PR was approved Step 1"
+        
+      - name: addApproveLabel
+        uses: buildsville/add-remove-label@v1
+        with:
+          token: ${{secrets.GITHUB_TOKEN}}
+          label: merged
+          type: add
