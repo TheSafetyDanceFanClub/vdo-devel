@@ -12,9 +12,17 @@ jobs:
       - name: step 1
         run: echo "This PR was approved Step 1"
         
-      - name: addApproveLabel
+      - name: addLabel
         uses: buildsville/add-remove-label@v1
         with:
           token: ${{secrets.GITHUB_TOKEN}}
           label: merged
           type: add
+      
+      - name: removeLabel
+        uses: buildsville/add-remove-label@v1
+        with:
+          token: ${{secrets.GITHUB_TOKEN}}
+          label: approved
+          type: remove
+
