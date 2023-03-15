@@ -29,7 +29,9 @@ jobs:
         
     - name: Run-Untrusted-Tests
       # run: make jenkins
-      run: exit 1
+      run: |
+        sleep 10
+        exit 1
       
     - name: Add public-testing failed
       if: failure()
