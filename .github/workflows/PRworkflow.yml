@@ -26,3 +26,6 @@ jobs:
         token: ${{secrets.GITHUB_TOKEN}}
         label: untested
         type: remove
+        
+    - name: Run vdo-devel Tests (make jenkins)
+      run: make jenkins
