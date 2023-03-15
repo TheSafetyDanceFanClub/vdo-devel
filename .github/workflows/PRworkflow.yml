@@ -29,18 +29,25 @@ jobs:
         
     - name: Run vdo-devel Tests (make jenkins)
       run: make jenkins
-
+      
     - name: Add public-testing failed
       if: failure() 
       uses: buildsville/add-remove-label@v1
       with:
         token: ${{secrets.GITHUB_TOKEN}}
         label: public-testing-failed
-        type: remove
+        type: add
 
     - name: Add public-testing passed
       if: success() 
       with: 
         token: ${{secrets.GITHUB_TOKEN}}
         label: public-testing-passed
+        type: add
+
+    - name: add testing running label
+      uses: buildsville/add-remove-label@v1
+      with:
+        token: ${{secrets.GITHUB_TOKEN}}
+        label: public-testing-running
         type: remove
