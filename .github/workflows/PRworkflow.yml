@@ -28,8 +28,9 @@ jobs:
         type: remove
         
     - name: Run-Untrusted-Tests
-      run: make jenkins
-
+      # run: make jenkins
+      run: exit 1
+      
     - name: Add public-testing failed
       if: failure()
       uses: buildsville/add-remove-label@v1
