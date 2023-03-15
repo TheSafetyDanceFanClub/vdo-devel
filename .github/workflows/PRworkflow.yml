@@ -27,7 +27,14 @@ jobs:
         label: untested
         type: remove
         
-    - name: Run vdo-devel Tests (make jenkins)
+    - name: Run-Untrusted-Tests
       run: make jenkins
-      
 
+    - name: Add public-testing failed
+      if: failure()
+      uses: buildsville/add-remove-label@v1
+      with:
+        token: ${{secrets.GITHUB_TOKEN}}
+        lable: public testing failed
+        type: add
+        
