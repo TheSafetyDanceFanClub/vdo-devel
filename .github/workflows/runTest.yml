@@ -5,7 +5,7 @@ on:
     types: [ labeled ]
 
 jobs:
-  build:
+  PRbuild:
     if: ${{ github.event.label.name == 'pruntested' }}
     runs-on: self-hosted
     steps:
