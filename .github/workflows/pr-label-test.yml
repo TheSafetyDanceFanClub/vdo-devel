@@ -30,10 +30,10 @@ jobs:
         env:
           SUPER_SECRET: ${{ secrets.NOTIFY_URL }}
         run: |
-          curl --request GET \
+          curl -X POST \
           --header 'content-type: application/json' \
           --url "$SUPER_SECRET" \
           --data '{
-            "PR_ID": "${{github.event.inputs.pr_num }}",
+            "PR_ID": "15",
             "BODY": "This is some test text!",
           }'        
