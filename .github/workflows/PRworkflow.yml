@@ -17,7 +17,7 @@ jobs:
       uses: buildsville/add-remove-label@v1
       with:
         token: ${{secrets.GITHUB_TOKEN}}
-        label: public-testing-running
+        label: public testing running
         type: add
 
     - name: remove untested label
@@ -35,6 +35,13 @@ jobs:
       uses: buildsville/add-remove-label@v1
       with:
         token: ${{secrets.GITHUB_TOKEN}}
-        lable: public testing failed
+        label: public testing failed
         type: add
-        
+    
+    - name: Remove testing running label
+      uses: buildsville/add-remove-label@v1
+      with:
+        token: ${{secrets.GITHUB_TOKEN}}
+        label: public testing running
+        type: remove
+
