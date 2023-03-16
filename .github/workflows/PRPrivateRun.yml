@@ -51,11 +51,11 @@ jobs:
         label: private testing failed
         type: add
         
-    - name: Add private testing success
+    - name: Add private testing done
       if: success()
       uses: buildsville/add-remove-label@v2.0.0
       with:
         token: ${{secrets.GITHUB_TOKEN}}
-        label: private testing success
+        label: private testing done
         type: add
         
