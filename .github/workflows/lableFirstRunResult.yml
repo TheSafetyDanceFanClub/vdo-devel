@@ -2,7 +2,7 @@ name: Label First Run Result
 
 on:
   workflow_run:
-    workflows: [PRBuild]
+    workflows: [Run Untrusted Test]
     types: [completed]
 
 jobs:
