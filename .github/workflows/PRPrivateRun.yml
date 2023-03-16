@@ -5,6 +5,11 @@ on:
     types: [ labeled ]
 
 jobs:
+  printLabel:
+    runs-on: self-hosted
+    steps:
+      - run: echo LABEL {{ github.event.label.name }}
+
   build:
     if: ${{ github.event.label.name == 'public testing done' }}
     runs-on: self-hosted
