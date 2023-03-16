@@ -33,7 +33,7 @@ jobs:
       # run: make jenkins
       run: |
         sleep 30
-        exit 1
+        exit 0
 
     - name: Add public testing failed if failed
       if: failure()
