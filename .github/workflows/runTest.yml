@@ -1,4 +1,4 @@
-name: Run Test
+name: Run Untrusted Test
 
 on:
   pull_request:
