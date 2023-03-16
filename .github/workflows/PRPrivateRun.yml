@@ -8,7 +8,7 @@ jobs:
   printLabel:
     runs-on: self-hosted
     steps:
-      - run: echo LABEL {{ github.event.label.name }}
+      - run: echo LABEL ${{ github.event.label.name }}
 
   build:
     if: ${{ github.event.label.name == 'public testing done' }}
