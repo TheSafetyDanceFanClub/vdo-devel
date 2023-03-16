@@ -16,33 +16,36 @@ jobs:
       run: echo Testing Start
 
     - name: add testing running label
-      uses: buildsville/add-remove-label@v1
+      uses: buildsville/add-remove-label@v2.0.0
       with:
         token: ${{secrets.GITHUB_TOKEN}}
-        label: public testing running
+        label: "public testing running"
         type: add
 
     - name: remove untested label
-      uses: buildsville/add-remove-label@v1
+      uses: buildsville/add-remove-label@v2.0.0
       with:
         token: ${{secrets.GITHUB_TOKEN}}
         label: untested
         type: remove
         
     - name: Run-Untrusted-Tests
-      run: make jenkins
-    
-    - name: Add public-testing failed
+      # run: make jenkins
+      run: |
+        sleep 30
+        exit 1
+
+    - name: Add public testing failed if failed
       if: failure()
-      uses: buildsville/add-remove-label@v1
+      uses: buildsville/add-remove-label@v2.0.0
       with:
         token: ${{secrets.GITHUB_TOKEN}}
         label: public testing failed
         type: add
         
     - name: remove untested label
-      uses: buildsville/add-remove-label@v1
+      uses: buildsville/add-remove-label@v2.0.0
       with:
         token: ${{secrets.GITHUB_TOKEN}}
-        label: public testing running
+        label: "public testing running"
         type: remove
