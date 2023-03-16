@@ -16,3 +16,10 @@ jobs:
     - name: Run-Untrusted-Tests
       # run: make jenkins
       run: exit 0
+    
+    - name: addlabel
+      uses: buildsville/add-remove-label@v1
+      with:
+        token: ${{secrets.LABELSECRET}}
+        label: public-testing-untested
+        type: add
