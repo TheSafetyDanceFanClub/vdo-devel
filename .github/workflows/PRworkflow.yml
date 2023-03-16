@@ -34,6 +34,13 @@ jobs:
       run: |
         sleep 30
         exit 0
+    
+    - name: remove public testing running label
+      uses: buildsville/add-remove-label@v2.0.0
+      with:
+        token: ${{secrets.GITHUB_TOKEN}}
+        label: "public testing running"
+        type: remove
 
     - name: Add public testing failed if failed
       if: failure()
@@ -43,9 +50,4 @@ jobs:
         label: public testing failed
         type: add
         
-    - name: remove public testing running label
-      uses: buildsville/add-remove-label@v2.0.0
-      with:
-        token: ${{secrets.GITHUB_TOKEN}}
-        label: "public testing running"
-        type: remove
+    
