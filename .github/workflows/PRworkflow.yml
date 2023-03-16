@@ -33,7 +33,7 @@ jobs:
       # run: make jenkins
       run: |
         sleep 30
-        exit 0
+        exit 1
     
     - name: remove public testing running label
       uses: buildsville/add-remove-label@v2.0.0
