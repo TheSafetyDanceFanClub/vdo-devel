@@ -33,7 +33,7 @@ jobs:
       # run: make jenkins
       run: |
         sleep 30
-        exit 1
+        exit 0
     
     - name: remove public testing running label
       if: always()
@@ -43,7 +43,7 @@ jobs:
         label: "public testing running"
         type: remove
 
-    - name: Add public testing failed if failed
+    - name: Add public testing failed
       if: failure()
       uses: buildsville/add-remove-label@v2.0.0
       with:
@@ -51,4 +51,11 @@ jobs:
         label: public testing failed
         type: add
         
-    
+    - name: Add public testing success
+      if: success()
+      uses: buildsville/add-remove-label@v2.0.0
+      with:
+        token: ${{secrets.GITHUB_TOKEN}}
+        label: public testing success
+        type: add
+        
