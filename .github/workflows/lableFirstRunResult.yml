@@ -1,0 +1,29 @@
+name: Label First Run Result
+
+on:
+  workflow_run:
+    workflows: [PRBuild]
+    types: [completed]
+
+jobs:
+  on-success:
+    runs-on: self-hosted
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: add testing running label
+        uses: buildsville/add-remove-label@v1
+        with:
+          token: ${{secrets.GITHUB_TOKEN}}
+          label: public testing success
+          type: add
+          
+  on-failure:
+    runs-on: self-hosted
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    steps:
+      - name: add testing running label
+        uses: buildsville/add-remove-label@v1
+        with:
+          token: ${{secrets.GITHUB_TOKEN}}
+          label: public testing fail
+          type: add
