@@ -5,7 +5,7 @@ on:
     types: [ labeled ]
 
 jobs:
-  build:
+  runPublicTests:
     if: ${{ github.event.label.name == 'untested' }}
     runs-on: self-hosted
     steps:
@@ -19,7 +19,7 @@ jobs:
       uses: buildsville/add-remove-label@v2.0.0
       with:
         token: ${{secrets.GITHUB_TOKEN}}
-        label: "public testing running"
+        label: public testing running
         type: add
 
     - name: remove untested label
@@ -40,7 +40,7 @@ jobs:
       uses: buildsville/add-remove-label@v2.0.0
       with:
         token: ${{secrets.GITHUB_TOKEN}}
-        label: "public testing running"
+        label: public testing running
         type: remove
 
     - name: Add public testing failed
@@ -58,4 +58,52 @@ jobs:
         token: ${{secrets.GITHUB_TOKEN}}
         label: public testing done
         type: add
+        
+  runPrivateTests:
+    needs: runPublicTests
+    runs-on: [self-hosted, trusted]
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+    - name: Start Private testing
+      run: echo Private Testing Start
+      
+    - name: add testing running label
+      uses: buildsville/add-remove-label@v2.0.0
+      with:
+        token: ${{secrets.GITHUB_TOKEN}}
+        label: private testing running
+        type: add
+        
+    - name: Run-trusted-Tests
+      # run: make jenkins
+      run: |
+        sleep 30
+        exit 0
+    
+    - name: remove private testing running label
+      if: always()
+      uses: buildsville/add-remove-label@v2.0.0
+      with:
+        token: ${{secrets.GITHUB_TOKEN}}
+        label: private testing running
+        type: remove
+
+    - name: Add private testing failed
+      if: failure()
+      uses: buildsville/add-remove-label@v2.0.0
+      with:
+        token: ${{secrets.GITHUB_TOKEN}}
+        label: private testing failed
+        type: add
+        
+    - name: Add private testing success
+      if: success()
+      uses: buildsville/add-remove-label@v2.0.0
+      with:
+        token: ${{secrets.GITHUB_TOKEN}}
+        label: private testing done
+        type: add
+        
         
