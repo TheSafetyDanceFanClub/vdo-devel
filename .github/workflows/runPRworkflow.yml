@@ -1,0 +1,15 @@
+name: run PR workflow
+
+on:
+  pull_request_target:
+    types: [ labeled ]
+
+jobs:
+  printenv:
+    runs-on: self-hosted
+    steps:
+      run: printenv
+      
+  runPrivatWorkflow:
+    uses: TheSafetyDanceFanClub/vdo-devel/.github/workflows/runPrivateTests.yml
+    
