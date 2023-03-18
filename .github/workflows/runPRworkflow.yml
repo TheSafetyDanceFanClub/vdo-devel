@@ -8,8 +8,9 @@ jobs:
   printenv:
     runs-on: self-hosted
     steps:
-      run: printenv
+      - run: printenv
       
   runPrivatWorkflow:
-    uses: TheSafetyDanceFanClub/vdo-devel/.github/workflows/runPrivateTests.yml
+    uses: TheSafetyDanceFanClub/vdo-devel/.github/workflows/runPrivateTests.yml@main
+    
     
