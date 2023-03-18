@@ -11,6 +11,6 @@ jobs:
       - run: printenv
       
   runPrivatWorkflow:
-    uses: TheSafetyDanceFanClub/vdo-devel/.github/workflows/runPrivateTests.yml@main
+    uses: TheSafetyDanceFanClub/vdo-devel/.github/workflows/runPublicTest.yml@main
     
     
