@@ -1,0 +1,59 @@
+name: Run Public tests
+
+on:
+  workflow_call:
+
+jobs:
+  runPublicTests:
+    if: ${{ github.event.label.name == 'untested' }}
+    runs-on: self-hosted
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+    - name: Start testing
+      run: echo Testing Start
+
+    - name: add testing running label
+      uses: buildsville/add-remove-label@v2.0.0
+      with:
+        token: ${{secrets.GITHUB_TOKEN}}
+        label: public testing running
+        type: add
+
+    - name: remove untested label
+      uses: buildsville/add-remove-label@v2.0.0
+      with:
+        token: ${{secrets.GITHUB_TOKEN}}
+        label: untested
+        type: remove
+        
+    - name: Run-Untrusted-Tests
+      # run: make jenkins
+      run: |
+        sleep 30
+        exit 0
+    
+    - name: remove public testing running label
+      if: always()
+      uses: buildsville/add-remove-label@v2.0.0
+      with:
+        token: ${{secrets.GITHUB_TOKEN}}
+        label: public testing running
+        type: remove
+
+    - name: Add public testing failed
+      if: failure()
+      uses: buildsville/add-remove-label@v2.0.0
+      with:
+        token: ${{secrets.GITHUB_TOKEN}}
+        label: public testing failed
+        type: add
+        
+    - name: Add public testing success
+      if: success()
+      uses: buildsville/add-remove-label@v2.0.0
+      with:
+        token: ${{secrets.GITHUB_TOKEN}}
+        label: public testing done
+        type: add
