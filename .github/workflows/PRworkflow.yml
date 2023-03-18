@@ -6,7 +6,7 @@ on:
 
 jobs:
   runPublicTests:
-    if: ${{ github.event.label.name == 'untested' }}
+    if: ${{ github.event.label.name == 'untested1' }}
     runs-on: self-hosted
     steps:
     - uses: actions/checkout@v2
@@ -61,6 +61,7 @@ jobs:
         
   runPrivateTests:
     needs: runPublicTests
+    if: ${{ github.event.label.name == 'untested1' }}
     runs-on: [self-hosted, trusted]
     steps:
     - uses: actions/checkout@v2
