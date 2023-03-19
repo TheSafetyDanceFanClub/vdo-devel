@@ -10,7 +10,11 @@ jobs:
     steps:
       - run: printenv
       
-  runPrivatWorkflow:
+  runPublicWorkflow: 
+    if: ${{ github.event.label.name == 'untested' }}
     uses: TheSafetyDanceFanClub/vdo-devel/.github/workflows/runPublicTest.yml@main
-    
+
+  runPrivateWorkflow: 
+    if: ${{ github.event.label.name == 'untested' }}
+    uses: TheSafetyDanceFanClub/vdo-devel/.github/workflows/runPrivateTest.yml@main
     
