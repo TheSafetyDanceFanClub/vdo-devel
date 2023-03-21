@@ -1,4 +1,4 @@
-name: z. PR private test
+name: Z. PR private test
 
 on:
   pull_request_target:
