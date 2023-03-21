@@ -5,16 +5,9 @@ on:
     branches: [ main ]
 
 jobs:
-  approved:
+  merged:
     if: github.event.label.name == 'merged'
     runs-on: ubuntu-latest
-    steps:
+    steps:    
       - name: step 1
         run: echo "This PR was merged Step 1"
-              
-      - name: removeLabel
-        uses: buildsville/add-remove-label@v1
-        with:
-          token: ${{secrets.GITHUB_TOKEN}}
-          label: merged
-          type: remove
