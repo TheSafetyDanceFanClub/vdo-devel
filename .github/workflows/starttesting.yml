@@ -1,4 +1,4 @@
-name: Start testing
+name: Z. Start testing
 on:
   issue_comment:
     types: [created, edited]
