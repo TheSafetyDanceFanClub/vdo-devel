@@ -1,8 +1,9 @@
 name: run PR workflow
 
 on:
-  pull_request_target:
-    types: [ labeled ]
+#  pull_request_target:
+#    types: [ labeled ]
+  workflow_dispatch:
 
 jobs:
   printenv:
