@@ -6,7 +6,7 @@ on:
 
 jobs:
   review_needed:
-    if: ${{ github.event.action == "labeled" && github.event.label.name == "review needed" }}
+    if: ${{ github.event.action == "labeled" && github.event.label.name == "approved" }}
     runs-on: ubuntu-latest
     steps:
       - name: step 1
