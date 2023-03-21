@@ -9,6 +9,7 @@ jobs:
   pr_merged:
     if: ${{ github.event.label.name == "merged" }}  
     runs-on: ubuntu-latest
+    name: Send a message to slack
     steps:
       - name: step 1
         run: echo "merged label set"
