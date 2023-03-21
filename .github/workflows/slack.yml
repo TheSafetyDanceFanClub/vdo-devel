@@ -1,4 +1,5 @@
 name: Notify Slack on State Changes
+
 on:
   pull_request_target:
     types: [ labeled ]
@@ -6,6 +7,7 @@ on:
 
 jobs:
   pr_merged:
+    if: ${{ github.event.label.name == "merged" }}  
     runs-on: ubuntu-latest
     steps:
       - name: step 1
