@@ -11,6 +11,6 @@ jobs:
       - name: addlabel
         uses: buildsville/add-remove-label@v1
         with:
-          token: ${{secrets.CHUNGLABEL}}
+          token: ${{secrets.RUNPRLABEL}}
           label: public testing done
           type: add
