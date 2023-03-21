@@ -40,4 +40,4 @@ upgrader:	Automated upgrade mechanism.
 
 virt:		Source to our "permabit-virt" Debian package: for 
 		manipulating a virtual network interface, used in
-		some automated tests
+		some automated tests.
