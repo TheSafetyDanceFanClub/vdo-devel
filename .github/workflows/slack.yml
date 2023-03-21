@@ -5,7 +5,7 @@ on:
     branches: [ main ]
 
 jobs:
-  review_needed:
+  pr_merged:
     if: ${{ github.event.action == "labeled" && github.event.label.name == "merged" }}
     runs-on: ubuntu-latest
     steps:
@@ -22,4 +22,4 @@ jobs:
           --data '{
             "PR_ID": "15",
             "BODY": "This is some test text!",
-          }'        
+          }'          
