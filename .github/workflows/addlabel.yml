@@ -1,4 +1,4 @@
-name: Add untested label
+name: Add PR label
 on:
   pull_request_target:
     branches: [ main ]
