@@ -26,14 +26,3 @@ jobs:
           label: approved
           type: remove
           
-      - shell: bash
-        env:
-          SUPER_SECRET: ${{ secrets.NOTIFY_URL }}
-        run: |
-          curl -X POST \
-          --header 'content-type: application/json' \
-          --url "$SUPER_SECRET" \
-          --data '{
-            "PR_ID": "15",
-            "BODY": "This is some test text!",
-          }'        
