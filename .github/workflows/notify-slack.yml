@@ -1,27 +1,12 @@
-name: Notify Slack on State Changes
-
+name: Notify Slack
 on:
   pull_request_target:
-    types: [ labeled ]
     branches: [ main ]
 
 jobs:
-  pr_merged:
-    if: ${{ github.event.label.name == "merged" }}  
+  send_message:
     runs-on: ubuntu-latest
-    name: Send a message to slack
+    name: Send a message to Slack
     steps:
-      - name: step 1
-        run: echo "merged label set"
-        
-      - shell: bash
-        env:
-          SUPER_SECRET: ${{ secrets.NOTIFY_URL }}
-        run: |
-          curl -X POST \
-          --header 'content-type: application/json' \
-          --url "$SUPER_SECRET" \
-          --data '{
-            "PR_ID": "15",
-            "BODY": "This is some test text!",
-          }'         
+      - name: addlabel
+        run: echo Starting
