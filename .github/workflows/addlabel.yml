@@ -1,4 +1,4 @@
-name: Add PR label
+name: 0. Add PR label
 on:
   pull_request_target:
     branches: [ main ]
