@@ -28,10 +28,10 @@ jobs:
         type: remove
         
     - name: Run-Untrusted-Tests
-      # run: make jenkins
-      run: |
-        sleep 30
-        exit 0
+      run: make jenkins
+      # run: |
+      #  sleep 30
+      #  exit 0
     
     - name: remove public testing running label
       if: always()
@@ -49,6 +49,29 @@ jobs:
         label: public testing failed
         type: add
         
+    - name: Upload artifact
+      if: failure()
+      uses: EnricoMi/publish-unit-test-result-action/composite@v1
+      with:
+        files: common/logs/**/*.xml
+    
+    - name: Prepare Logfiles
+      if: failure()
+      run: |  
+        cd common/logs/perltests
+        for file in *.log;
+        do
+          mv ${file} ${file/::/--}
+        done
+
+    - name: Upload artifact
+      if: failure()
+      uses: actions/upload-artifact@v2
+      with:
+        name: Upload Test Logs
+        path: common/logs/perltests/*.log
+        retention-days: 5
+
     - name: Add public testing success
       if: success()
       uses: buildsville/add-remove-label@v2.0.0
