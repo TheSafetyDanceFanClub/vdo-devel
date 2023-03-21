@@ -1,4 +1,4 @@
-name: Run Private Test
+name: Run Private Tests
 
 on:
   workflow_call:
@@ -46,7 +46,7 @@ jobs:
       if: success()
       uses: buildsville/add-remove-label@v2.0.0
       with:
-        token: ${{secrets.GITHUB_TOKEN}}
+        token: ${{secrets.RUNPRLABEL}}
         label: private testing done
         type: add
         
