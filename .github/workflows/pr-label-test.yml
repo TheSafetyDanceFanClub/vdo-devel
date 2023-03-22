@@ -12,8 +12,7 @@ jobs:
       pr-number: 16
       pr-text: "This is some text!"
       pr-link: ""
-    secrets:
-      token: ${{ secrets.NOTIFY_URL }}
+    secrets: inherit
 
   approved_label:
     if: github.event.label.name == 'approved'
