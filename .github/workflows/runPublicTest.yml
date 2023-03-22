@@ -62,7 +62,7 @@ jobs:
       if: failure()
       run: |  
         cd logs/vdotests
-        for file in *.log;
+        for file in *::*.log;
         do
           mv ${file} ${file/::/--}
         done
