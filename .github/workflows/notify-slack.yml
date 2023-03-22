@@ -16,7 +16,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Send Message
-      shell: bash
       run: |
           curl -X POST \
           --header 'content-type: application/json' \
