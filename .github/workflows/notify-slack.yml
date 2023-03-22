@@ -18,7 +18,7 @@ jobs:
     - name: Send Message
       shell: bash
       run: |
-          curl --request POST \
+          curl -X POST \
           --header 'content-type: application/json' \
           --url ${{ secrets.NOTIFY_URL }} \
           --data '{ \
