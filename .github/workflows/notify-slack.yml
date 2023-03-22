@@ -20,8 +20,8 @@ jobs:
       run: |
           curl -X POST \
           --header 'content-type: application/json' \
-          --url "${{ secrets.NOTIFY_URL }}" \
+          --url ${{ secrets.NOTIFY_URL }} \
           --data '{ \
-           PR_ID: 15, \
+           "PR_ID": "15", \
            "BODY": "This is some text", \
            }'
