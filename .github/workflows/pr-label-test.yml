@@ -27,7 +27,7 @@ jobs:
           type: remove
           
       - name: sendSlack
-        uses: TheSafetyDanceFanClub/vdo-devel/.github/workflows/notify-slack.yml@main
+        uses: ./.github/workflows/notify-slack.yml@main
         with:
           pr-number: 16
           pr-text: "This is some text!"
