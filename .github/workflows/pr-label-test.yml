@@ -9,7 +9,7 @@ jobs:
     if: github.event.label.name == 'approved'
     uses: ./.github/workflows/notify-slack.yml
     with:
-      pr-number: 16
+      pr-number: "16"
       pr-text: "This is some text!"
       pr-link: ""
     secrets: inherit
