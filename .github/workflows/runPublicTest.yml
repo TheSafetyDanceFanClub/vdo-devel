@@ -56,12 +56,12 @@ jobs:
       if: failure()
       uses: EnricoMi/publish-unit-test-result-action/composite@v1
       with:
-        files: common/logs/**/*.xml
+        files: logs/**/*.xml
     
     - name: Prepare Logfiles
       if: failure()
       run: |  
-        cd common/logs/perltests
+        cd logs/vdotests
         for file in *.log;
         do
           mv ${file} ${file/::/--}
@@ -72,7 +72,7 @@ jobs:
       uses: actions/upload-artifact@v2
       with:
         name: Upload Test Logs
-        path: common/logs/perltests/*.log
+        path: logs/vdotests/*.log
         retention-days: 5
 
     - name: Add public testing success
