@@ -1,13 +1,27 @@
 name: Notify Slack
 on:
-  pull_request_target:
-    types: [ labeled ]
-    branches: [ main ]
-
+  workflow_call:
+    inputs:
+      pr-number:
+        required: true
+        type: number
+      pr-text:
+        required: true
+        type: string
+      pr-link:
+        required: true
+        type: string
 jobs:
-  send_message:
+  send_slack_message:
     runs-on: ubuntu-latest
-    name: Send a message to Slack
     steps:
-      - name: addlabel
-        run: echo Starting
+    - name: Send Message
+      shell: bash
+      run: |
+          curl --request POST \
+          --header 'content-type: application/json' \
+          --url ${{ secrets.SLACK_URL }} \
+          --data '{ \
+           "PR_ID": "${{ inputs.pr-number }}", \
+           "BODY": ${{ inputs.pr-text }}", \
+           }'
