@@ -20,4 +20,7 @@ jobs:
           curl -X POST \
           --header "content-type: application/json" \
           --url ${{ secrets.NOTIFY_URL }} \
-          --data "{ 'PR_ID': '15', 'BODY': 'This is some text' }"
+          --data "{ \
+            'PR_ID': ${{ inputs.pr-number }}, \
+            'BODY': ${{ inputs.pr-text }} \
+          }"
