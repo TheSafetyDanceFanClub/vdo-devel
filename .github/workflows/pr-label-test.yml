@@ -13,7 +13,7 @@ jobs:
       pr-text: "This is some text!"
       pr-link: ""
     secrets:
-      token: ${{ secrets.GITHUB_TOKEN }}
+      token: ${{ secrets.NOTIFY_URL }}
 
   approved_label:
     if: github.event.label.name == 'approved'
