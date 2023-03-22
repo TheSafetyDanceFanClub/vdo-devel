@@ -1,10 +1,13 @@
 name: Run Private Tests
 
 on:
+  pull_request_target:
+    types: [ labeled ]
   workflow_call:
 
 jobs:
   runPrivateTests:
+    if: ${{ github.event.label.name == 'public_test_done' || github.event_name == 'workflow_call' }}
     runs-on: [self-hosted, trusted]
     steps:
     - uses: actions/checkout@v2
