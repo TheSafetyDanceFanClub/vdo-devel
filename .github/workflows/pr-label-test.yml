@@ -5,7 +5,7 @@ on:
     branches: [ main ]
 
 jobs:
-  approved:
+  approved_label:
     if: github.event.label.name == 'approved'
     runs-on: ubuntu-latest
     steps:
@@ -25,4 +25,12 @@ jobs:
           token: ${{secrets.GITHUB_TOKEN}}
           label: approved
           type: remove
+          
+      - name: sendSlack
+        uses: .github/workflows/slack-notify.yml@main
+        with:
+          pr-number: 16
+          pr-text: "This is some text!"
+          pr-link: ""
+      
           
