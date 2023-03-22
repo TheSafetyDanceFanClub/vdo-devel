@@ -27,7 +27,7 @@ jobs:
           type: remove
           
       - name: sendSlack
-        uses: .github/workflows/slack-notify.yml@main
+        uses: .github/workflows/notify-slack.yml@main
         with:
           pr-number: 16
           pr-text: "This is some text!"
