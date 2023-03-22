@@ -7,7 +7,7 @@ on:
 
 jobs:
   runPublicTests:
-    if: ${{ github.event.label.name == 'untested' }}
+    if: ${{ github.event.label.name == 'untested' || github.event_name == 'workflow_call' }}
     runs-on: self-hosted
     steps:
     - uses: actions/checkout@v2
