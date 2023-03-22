@@ -21,6 +21,6 @@ jobs:
           --header "content-type: application/json" \
           --url ${{ secrets.NOTIFY_URL }} \
           --data "{ \
-            'PR_ID': ${{ inputs.pr-number }}, \
-            'BODY': ${{ inputs.pr-text }} \
+            'PR_ID': '${{ inputs.pr-number }}', \
+            'BODY': '${{ inputs.pr-text }}' \
           }"
