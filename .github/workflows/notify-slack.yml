@@ -23,5 +23,5 @@ jobs:
           --url ${{ secrets.NOTIFY_URL }} \
           --data '{ \
            "PR_ID": "15", \
-           "BODY": "This is some text", \
+           "BODY": "This is some text" \
            }'
