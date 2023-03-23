@@ -7,7 +7,7 @@ on:
 
 jobs:
   runPrivateTests:
-    if: ${{ github.event.label.name == 'public_test_done' || github.event_name == 'workflow_call' }}
+    if: ${{ github.event.label.name == 'public_test_done' }}
     runs-on: [self-hosted, trusted]
     steps:
     - uses: actions/checkout@v2
@@ -24,10 +24,7 @@ jobs:
         type: add
         
     - name: Run-trusted-Tests
-      # run: make jenkins
-      run: |
-        sleep 30
-        exit 0
+      run: make jenkins
     
     - name: remove private testing running label
       if: always()
