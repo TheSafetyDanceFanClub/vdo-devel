@@ -8,12 +8,10 @@ jobs:
   set_labels:  
     runs-on: ubuntu-latest
     steps:
-      -  uses: tspascoal/get-user-teams-membership@v2
-         id: checkUserMember
-         with:
+      - uses: jamessingleton/is-organization-member@v1
+        with:
+          organization: TheSafetyDanceFanClub
           username: ${{ github.actor }}
-          team: 'vdo'
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - if: ${{ steps.checkUserMember.outputs.isTeamMember == 'false' }}
-        
-          
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - if: ${{ steps.is_organization_member.outputs.result == 'false' }}          
+        run: echo User Does Not Belong to TheSafetyDanceFanClub
