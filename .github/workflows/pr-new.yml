@@ -5,10 +5,15 @@ on:
     types: [ opened, reopened, ready_for_review ]
 
 jobs:
-  dump_contexts_to_log:
+  set_labels:  
     runs-on: ubuntu-latest
     steps:
-      - name: Dump GitHub context
-        id: github_context_step
-        run: echo '${{ toJSON(github) }}'
-    
+      -  uses: tspascoal/get-user-teams-membership@v2
+         id: checkUserMember
+         with:
+          username: ${{ github.actor }}
+          team: 'vdo'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - if: ${{ steps.checkUserMember.outputs.isTeamMember == 'false' }}
+        
+          
