@@ -11,6 +11,9 @@ on:
       pr-link:
         required: true
         type: string
+    secrets:
+      token:
+        required: true
 jobs:
   send_slack_message:
     runs-on: ubuntu-latest
@@ -19,7 +22,7 @@ jobs:
       run: |
           curl -X POST \
           --header "content-type: application/json" \
-          --url ${{ secrets.NOTIFY_URL }} \
+          --url ${{ secrets.token }} \
           --data "{ \
             'PR_ID': '${{ inputs.pr-number }}', \
             'BODY': '${{ inputs.pr-text }}' \
