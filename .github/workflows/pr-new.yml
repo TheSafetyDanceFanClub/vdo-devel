@@ -17,7 +17,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
         
       - name: Echo Output
-        run: echo steps.is_organization_member.outputs.result
+        run: echo ${{ steps.is_organization_member.outputs.result }}
       - name: Send message
         if: steps.is_organization_member.outputs.result == false
         uses: ./.github/workflows/notify-slack.yml
