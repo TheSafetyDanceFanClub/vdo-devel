@@ -9,6 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check for org membership
+        id: is_organization_member
         uses: jamessingleton/is-organization-member@1.0.0
         with:
           organization: TheSafetyDanceFanClub
