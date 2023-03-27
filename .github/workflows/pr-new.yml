@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check for org membership
-        uses: jamessingleton/is-organization-member@1.0.1
+        uses: jamessingleton/is-organization-member@1.0.0
         with:
           organization: TheSafetyDanceFanClub
           username: ${{ github.actor }}
