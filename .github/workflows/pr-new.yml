@@ -8,7 +8,7 @@ jobs:
   set_labels:  
     runs-on: ubuntu-latest
     steps:
-      - uses: jamessingleton/is-organization-member@v1.0.0
+      - uses: jamessingleton/is-organization-member@1.0.1
         with:
           organization: TheSafetyDanceFanClub
           username: ${{ github.actor }}
