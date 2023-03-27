@@ -25,6 +25,11 @@ jobs:
         
     - name: Run-trusted-Tests
       run: make jenkins
+      
+    - name: Copy log file to /home/bunsen-home/artifacts
+      if: always()
+      run: |
+        cp -a logs /home/bunsen-home/artifacts/logs.${{ github.event.number }}
     
     - name: remove private testing running label
       if: always()
