@@ -15,10 +15,9 @@ jobs:
           organization: TheSafetyDanceFanClub
           username: ${{ github.actor }}
           token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Create Comment
-        if: |
-          steps.is_organization_member.outputs.result == false
-        run: echo User ${{ github.actor }} Does Not Belong to TheSafetyDanceFanClub
+        
+      - name: Echo Output
+        run: echo steps.is_organization_member.outputs.result
       - name: Send message
         if: steps.is_organization_member.outputs.result == false
         uses: ./.github/workflows/notify-slack.yml
