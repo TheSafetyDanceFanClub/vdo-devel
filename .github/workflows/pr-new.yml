@@ -14,15 +14,7 @@ jobs:
         with:
           organization: TheSafetyDanceFanClub
           username: ${{ github.actor }}
-          token: ${{ secrets.GITHUB_TOKEN }}        
-      - name: Send message
-        if: ${{ steps.is_organization_member.outputs.result }} == "false"
-        uses: ./.github/workflows/notify-slack.yml
-        with:
-          pr-number: ${{ github.event.pull_request.number }}
-          pr-text: ${{ github.event.pull_request.title }}
-          pr-link: ${{ github.event.pull_request.url }}   
-          token: ${{ secrets.NOTIFY_URL }}
+          token: ${{ secrets.GITHUB_TOKEN }}              
       - name: Add external contrib label
         if: |
           ${{ steps.is_organization_member.outputs.result }} == "false"
@@ -39,4 +31,11 @@ jobs:
           token: ${{secrets.GITHUB_TOKEN}}
           label: untested
           type: add     
-        
+      - name: Send message
+        if: ${{ steps.is_organization_member.outputs.result }} == "false"
+        uses: ./.github/workflows/notify-slack.yml
+        with:
+          pr-number: ${{ github.event.pull_request.number }}
+          pr-text: ${{ github.event.pull_request.title }}
+          pr-link: ${{ github.event.pull_request.url }}   
+          token: ${{ secrets.NOTIFY_URL }}        
