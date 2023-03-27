@@ -16,7 +16,7 @@ jobs:
           username: ${{ github.actor }}
           token: ${{ secrets.GITHUB_TOKEN }}        
       - name: Send message
-        if: ${{ steps.is_organization_member.outputs.result }} == false
+        if: ${{ steps.is_organization_member.outputs.result }} == "false"
         uses: ./.github/workflows/notify-slack.yml
         with:
           pr-number: ${{ github.event.pull_request.number }}
@@ -25,7 +25,7 @@ jobs:
           token: ${{ secrets.NOTIFY_URL }}
       - name: Add external contrib label
         if: |
-          ${{ steps.is_organization_member.outputs.result }} == false          
+          ${{ steps.is_organization_member.outputs.result }} == "false"
         uses: buildsville/add-remove-label@v2.0.0
         with:
           token: ${{secrets.GITHUB_TOKEN}}
@@ -33,7 +33,7 @@ jobs:
           type: add     
       - name: Add internal contrib label
         if: |
-          ${{ steps.is_organization_member.outputs.result }} == true          
+          ${{ steps.is_organization_member.outputs.result }} == "true"       
         uses: buildsville/add-remove-label@v2.0.0
         with:
           token: ${{secrets.GITHUB_TOKEN}}
