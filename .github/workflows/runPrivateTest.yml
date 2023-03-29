@@ -29,7 +29,8 @@ jobs:
     - name: Copy log file to /home/bunsen-home/artifacts
       if: always()
       run: |
-        cp -a logs /home/bunsen-home/artifacts/logs.`date +'%Y%m%d%H%M'`.${{ github.repository }}.${{ github.event.number }}
+        REPO=${{ github.repository }}
+        cp -a logs /home/bunsen-home/artifacts/logs.`date +'%Y%m%d%H%M'`.${REPO//\/\-}.${{ github.event.number }}
     
     - name: remove private testing running label
       if: always()
