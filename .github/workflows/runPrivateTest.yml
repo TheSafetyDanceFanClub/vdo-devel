@@ -30,7 +30,8 @@ jobs:
       if: always()
       run: |
         REPO=${{ github.repository }}
-        cp -a logs /home/bunsen-home/artifacts/logs.`date +'%Y%m%d%H%M'`.${REPO//\/\-}.${{ github.event.number }}
+        REPO=${REPO//\//-}
+        cp -a logs /home/bunsen-home/artifacts/logs.`date +'%Y%m%d%H%M'`.$REPO.${{ github.event.number }}
     
     - name: remove private testing running label
       if: always()
