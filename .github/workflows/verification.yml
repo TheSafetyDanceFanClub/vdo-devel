@@ -5,7 +5,7 @@ on:
     types: [ opened, reopened, ready_for_review ]
 
 jobs:
-  Verify-Pull-Request:  
+  Verify:  
     runs-on: ubuntu-latest
     steps:
       - name: Check for org membership
