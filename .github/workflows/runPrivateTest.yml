@@ -7,7 +7,7 @@ on:
 
 jobs:
   runPrivateTests:
-    if: ${{ github.event.label.name == 'public testing done' }}
+    if: ${{ github.event.label.name == 'public testing done 1' }}
     runs-on: [self-hosted, trusted]
     steps:
     - uses: actions/checkout@v2
