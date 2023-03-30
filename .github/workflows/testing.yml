@@ -6,7 +6,7 @@ on:
   workflow_call:
 
 jobs:
-  Testing_Public:
+  Public-Testing:
     if: ${{ github.event.label.name == 'untested' }}
     runs-on: [self-hosted, untrusted]
     steps:
@@ -83,9 +83,9 @@ jobs:
         label: public testing done
         type: add
 
-  Testing_Private:
+  Private-Testing:
     runs-on: [self-hosted, trusted]
-    needs: Testing_Public
+    needs: Public-Testing
     steps:
     - uses: actions/checkout@v2
       with:
