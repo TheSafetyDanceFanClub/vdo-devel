@@ -93,6 +93,13 @@ jobs:
     - name: Start Private testing
       run: echo Private Testing Start
       
+    - name: Add public testing success
+      uses: buildsville/add-remove-label@v2.0.0
+      with:
+        token: ${{secrets.GITHUB_TOKEN}}
+        label: public testing done
+        type: remove
+
     - name: add testing running label
       uses: buildsville/add-remove-label@v2.0.0
       with:
