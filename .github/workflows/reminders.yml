@@ -1,4 +1,4 @@
-name: PR reminder
+name: PR Reminder
 
 on:
   schedule:
