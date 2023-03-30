@@ -84,7 +84,6 @@ jobs:
         type: add
 
   runPrivateTests:
-    if: ${{ github.event.label.name == 'public testing done' }}
     runs-on: [self-hosted, trusted]
     steps:
     - uses: actions/checkout@v2
