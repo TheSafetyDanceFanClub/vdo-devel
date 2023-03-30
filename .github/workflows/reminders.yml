@@ -9,12 +9,5 @@ jobs:
   pr-reviews-reminder:
     runs-on: ubuntu-latest
     steps:
-    - uses: davideviolante/pr-reviews-reminder-action@v2.6.0
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        webhook-url: ${{ secrets.NOTIFY_URL }} # Required
-        provider: 'slack' 
-        channel: '#vdo-gh-testing' 
-        github-provider-map: '' # Optional, eg: DavideViolante:UEABCDEFG,foobar:UAABCDEFG
-        ignore-label: 'no reminder' 
+    - name: Show message
+      run: echo "Reminder fired"
