@@ -85,7 +85,7 @@ jobs:
 
   Testing_Private:
     runs-on: [self-hosted, trusted]
-    needs: runPublicTests
+    needs: Testing_Public
     steps:
     - uses: actions/checkout@v2
       with:
