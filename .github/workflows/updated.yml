@@ -1,0 +1,12 @@
+name: Updating
+
+on:
+  pull_request_target:
+    types: [ syncronize ]
+
+jobs:
+  Updating:  
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checks for PR updates
+        run: echo "pull request changed"
