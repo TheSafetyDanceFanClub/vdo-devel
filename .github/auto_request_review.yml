@@ -2,8 +2,8 @@
 reviewers:
   # The default reviewers
   defaults:
-#    - bjohnsto
-    - jochapma
+    - bjohnsto
+#    - jochapma
 #    - jshimkus-rh  
   
   # Number of reviewers
