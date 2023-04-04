@@ -2,9 +2,9 @@
 reviewers:
   # The default reviewers
   defaults:
-    - team:VDO
-#   - jochapman
-#   - jshimkus-rh  
+#    - bjohnsto
+    - jochapman
+#    - jshimkus-rh  
   
   # Number of reviewers
   number_of_reviewers: 1
