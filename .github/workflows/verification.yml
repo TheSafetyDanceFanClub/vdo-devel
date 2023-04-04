@@ -38,7 +38,6 @@ jobs:
           pr-link: ${{ github.event.pull_request.url }}   
           token: ${{ secrets.NOTIFY_URL }}
       - name: Assign reviewer
-        uses: delivery-much/actions-assigner@v1
+        uses: necojackarc/auto-request-review@v0.10.0
         with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          team-reviewers: "Bug Czar"
+          token: ${{ secrets.GITHUB_TOKEN }}
