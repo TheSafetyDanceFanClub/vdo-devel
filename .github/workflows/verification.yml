@@ -15,13 +15,6 @@ jobs:
           organization: TheSafetyDanceFanClub
           username: ${{ github.actor }}
           token: ${{ secrets.GITHUB_TOKEN }}              
-      - name: Add external contrib label
-        if: ${{ steps.is_organization_member.outputs.result == 'false' }}
-        uses: buildsville/add-remove-label@v2.0.0
-        with:
-          token: ${{secrets.RUNPRLABEL}}
-          label: verification needed
-          type: add     
       - name: Add internal contrib label
         if: ${{ steps.is_organization_member.outputs.result == 'true' }}
         uses: buildsville/add-remove-label@v2.0.0
@@ -29,6 +22,13 @@ jobs:
           token: ${{secrets.RUNPRLABEL}}
           label: untested
           type: add     
+      - name: Add external contrib label
+        if: ${{ steps.is_organization_member.outputs.result == 'false' }}
+        uses: buildsville/add-remove-label@v2.0.0
+        with:
+          token: ${{secrets.RUNPRLABEL}}
+          label: verification needed
+          type: add               
       - name: Send message
         if: ${{ steps.is_organization_member.outputs.result == 'false' }}
         uses: ./.github/workflows/notify-slack.yml
