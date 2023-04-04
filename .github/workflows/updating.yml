@@ -1,14 +1,15 @@
-name: Setting reviewers and assignees
+name: Reviewers/Assignees
 
 on:
   pull_request_target:
     types: [ opened, reopened, ready_for_review ]
 
 jobs:
-  Verifying-User:  
+  Reviewers:  
     runs-on: ubuntu-latest
     steps:
       - name: Assign reviewer
         uses: necojackarc/auto-request-review@v0.10.0
         with:
           token: ${{ secrets.RUNPRLABEL }}
+          config: .github/auto_request_review.yml # Config file location override
