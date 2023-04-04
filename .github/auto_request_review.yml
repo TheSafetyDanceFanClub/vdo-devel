@@ -1,4 +1,4 @@
 reviewers:
   # The default reviewers
   defaults:
-    - team:review-czar # GitHub team
+    - team:Review-Czar # GitHub team
