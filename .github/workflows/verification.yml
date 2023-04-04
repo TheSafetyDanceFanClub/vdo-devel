@@ -38,6 +38,6 @@ jobs:
           pr-link: ${{ github.event.pull_request.url }}   
           token: ${{ secrets.NOTIFY_URL }}
       - name: Assign reviewer
-        uses: kentaro-m/auto-assign-action@v1.2.5
+        uses: necojackarc/auto-request-review@v0.10.0
         with:
           repo-token: ${{ secrets.RUNPRLABEL }}
