@@ -40,4 +40,4 @@ jobs:
       - name: Assign reviewer
         uses: necojackarc/auto-request-review@v0.10.0
         with:
-          repo-token: ${{ secrets.RUNPRLABEL }}
+          token: ${{ secrets.RUNPRLABEL }}
