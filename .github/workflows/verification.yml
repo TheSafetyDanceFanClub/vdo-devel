@@ -40,4 +40,4 @@ jobs:
       - name: Assign reviewer
         uses: necojackarc/auto-request-review@v0.10.0
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.RUNPRLABEL }}
