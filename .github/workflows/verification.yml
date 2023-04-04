@@ -40,4 +40,4 @@ jobs:
       - name: Assign reviewer
         uses: kentaro-m/auto-assign-action@v1.2.5
         with:
-          token: ${{ secrets.RUNPRLABEL }}
+          repo-token: ${{ secrets.RUNPRLABEL }}
