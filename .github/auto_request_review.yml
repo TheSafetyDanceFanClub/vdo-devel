@@ -5,4 +5,6 @@ reviewers:
     - bjohnsto
 #   - jochapman
 #   - jshimkus-rh  
-
+  
+  # Number of reviewers
+  number_of_reviewers: 1
