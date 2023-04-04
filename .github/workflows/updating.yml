@@ -1,12 +1,14 @@
-name: Updating
+name: Setting reviewers and assignees
 
 on:
   pull_request_target:
-    types: [ syncronize ]
+    types: [ opened, reopened, ready_for_review ]
 
 jobs:
-  Updating:  
+  Verifying-User:  
     runs-on: ubuntu-latest
     steps:
-      - name: Checks for PR updates
-        run: echo "pull request changed"
+      - name: Assign reviewer
+        uses: necojackarc/auto-request-review@v0.10.0
+        with:
+          token: ${{ secrets.RUNPRLABEL }}
