@@ -36,4 +36,9 @@ jobs:
           pr-number: ${{ github.event.pull_request.number }}
           pr-text: ${{ github.event.pull_request.title }}
           pr-link: ${{ github.event.pull_request.url }}   
-          token: ${{ secrets.NOTIFY_URL }}        
+          token: ${{ secrets.NOTIFY_URL }}
+      - name: Assign reviewer
+        uses: rowi1de/auto-assign-review-teams@v1.1.3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          teams: "Bug Czar"
