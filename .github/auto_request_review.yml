@@ -2,11 +2,7 @@
 reviewers:
   # The default reviewers
   defaults:
-    - repository-owners # group
+    - bjohnsto
+#   - jochapman
+#   - jshimkus-rh  
 
-# Reviewer groups each of which has a list of GitHub usernames
-  groups:
-    repository-owners:
-      - bjohnsto
-#      - jochapman
-#      - jshimkus-rh
