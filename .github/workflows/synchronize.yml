@@ -1,0 +1,12 @@
+name: Synchronize
+
+on:
+  pull_request_target:
+    types: [ synchronize ]
+
+jobs:
+  Reviewers:  
+    runs-on: ubuntu-latest
+    steps:
+      - name: Updated code
+        run:  echo "HI THERE"
