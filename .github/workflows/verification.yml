@@ -29,15 +29,3 @@ jobs:
           token: ${{secrets.RUNPRLABEL}}
           label: verification needed
           type: add               
-      - name: Send message
-        if: ${{ steps.is_organization_member.outputs.result == 'false' }}
-        uses: ./.github/workflows/notify-slack.yml
-        with:
-          pr-number: ${{ github.event.pull_request.number }}
-          pr-text: ${{ github.event.pull_request.title }}
-          pr-link: ${{ github.event.pull_request.url }}   
-          token: ${{ secrets.NOTIFY_URL }}
-      - name: Assign reviewer
-        uses: necojackarc/auto-request-review@v0.10.0
-        with:
-          token: ${{ secrets.RUNPRLABEL }}
