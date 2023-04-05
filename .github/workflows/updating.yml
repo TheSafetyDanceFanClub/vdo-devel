@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Assign reviewer
-        uses: necojackarc/auto-request-review@v0.10.0
+        uses: kentaro-m/auto-assign-action@v1.2.5
         with:
-          token: ${{ secrets.RUNPRLABEL }}
-          config: .github/auto_request_review.yml # Config file location override
+          repo-token: ${{ secrets.RUNPRLABEL }}
+          configuration-path: .github/auto_request_review.yml # Config file location override
