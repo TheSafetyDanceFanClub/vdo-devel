@@ -1,0 +1,26 @@
+name: Opened
+on:
+  # Run this workflow only when a new pull request is opened
+  pull_request_target:
+    types: [opened]
+
+jobs:
+  PR_Assignment:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Make files accessible to actions
+      # https://github.com/actions/checkout#readme
+      - uses: actions/checkout@v2
+      # Install Node
+      # https://github.com/actions/setup-node#readme
+      - uses: actions/setup-node@v1
+        with:
+          node-version: 12
+      # Install dependencies
+      - run: npm ci      
+      # Run auto_assign.js with Node and pass the authentication token 
+      - name: Run script
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}      
+        run: node .github/actions/auto_assign.js
