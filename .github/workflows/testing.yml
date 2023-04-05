@@ -19,7 +19,7 @@ jobs:
     - name: add testing running label
       uses: buildsville/add-remove-label@v2.0.0
       with:
-        token: ${{secrets.GITHUB_TOKEN}}
+        token: ${{secrets.SETPRLABEL}}
         label: public testing running
         type: add
 
