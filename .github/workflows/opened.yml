@@ -11,6 +11,6 @@ jobs:
     steps:
       # Run assignment action 
       - name: Assign Reviewers and Assignees
-        uses: TheSafetyDanceFanClub/vdo-auto-assign@v1.0
+        uses: TheSafetyDanceFanClub/vdo-auto-assign
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
