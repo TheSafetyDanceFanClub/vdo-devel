@@ -114,7 +114,8 @@ jobs:
         exit 0
       
     - name: Copy log file to /home/bunsen-home/artifacts
-      if: always()
+      # if: always()
+      if: failure()
       run: |
         REPO=${{ github.repository }}
         REPO=${REPO//\//-}
