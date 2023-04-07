@@ -8,6 +8,7 @@
 
 # Specify a configuration file.
 #rcfile=
+#test pull
 
 # Python code to execute, usually for sys.path manipulation such as
 # pygtk.require().
