@@ -1,4 +1,4 @@
-name: Testing
+name: Testing Label New Secret
 
 on:
   pull_request:
