@@ -1,7 +1,7 @@
 name: Testing Label New Secret
 
 on:
-  pull_request:
+  pull_request_target:
     types: [ labeled ]
   workflow_call:
 
@@ -14,6 +14,6 @@ jobs:
     - name: add testing running label
       uses: buildsville/add-remove-label@v2.0.0
       with:
-        token: ${{secrets.VDODEVEL}}
+        token: ${{ secrets.VDODEVEL }}
         label: Secret Test
         type: add
