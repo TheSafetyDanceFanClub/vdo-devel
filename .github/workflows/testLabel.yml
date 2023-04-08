@@ -7,7 +7,7 @@ on:
 
 jobs:
   Public-Testing:
-    if: ${{ github.event.label.name == 'untested' }}
+    if: ${{ github.event.label.name == 'untested1' }}
     runs-on: [self-hosted, untrusted]
     steps:
 
@@ -15,5 +15,5 @@ jobs:
       uses: buildsville/add-remove-label@v2.0.0
       with:
         token: ${{secrets.GITHUB_TOKEN}}
-        label: public testing running
+        label: Secret Test
         type: add
