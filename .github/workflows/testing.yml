@@ -108,10 +108,10 @@ jobs:
         type: add
         
     - name: Run-trusted-Tests
-      # run: make jenkins
-      run: |
-        sleep 30
-        exit 0
+      run: make jenkins
+      #run: |
+      #  sleep 30
+      #  exit 0
       
     - name: Copy log file to /home/bunsen-home/artifacts
       # if: always()
