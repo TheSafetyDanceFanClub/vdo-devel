@@ -40,7 +40,14 @@ jobs:
         with:
           token: ${{secrets.RUNPRLABEL}}
           label: verification needed
-          type: add               
+          type: add 
+      - name: Wait for approval
+        if: ${{ steps.is_organization_member.outputs.result == 'false' }}      
+        uses: trstringer/manual-approval@v1
+        with:
+          secret: ${{ steps.generate_token.outputs.token }}
+          approvers: ${{ github.event.pr.requested_reviewers }}
+          minimum-approvals: 1
           
   Public-Testing:
     if: ${{ github.event.label.name == 'untested' }}
