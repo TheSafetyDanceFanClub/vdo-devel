@@ -2,7 +2,7 @@ name: Opened
 on:
   # Run this workflow only when a new pull request is opened
   pull_request_target:
-    types: [reopened]
+    types: [opened, reopened, ready_for_review]
 
 jobs:
   PR_Assignment:
