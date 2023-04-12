@@ -14,6 +14,9 @@ jobs:
   Verifying:  
     runs-on: ubuntu-latest
     steps:
+      - name: Start verification
+        run: echo Verification Start
+      
       # Run assignment action 
       - name: Assign reviewers and assignees
         uses: TheSafetyDanceFanClub/vdo-auto-assign@main
