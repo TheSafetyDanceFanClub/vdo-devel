@@ -64,8 +64,8 @@ jobs:
           timeout-minutes: 1440
           
   Public-Testing:
-    if: ${{ github.event.label.name == 'untested' }}
     runs-on: [self-hosted, untrusted]
+    needs: [Verifying]      
     steps:
     - uses: actions/checkout@v2
       with:
@@ -142,7 +142,7 @@ jobs:
 
   Private-Testing:
     runs-on: [self-hosted, trusted]
-    needs: Public-Testing
+    needs: [Verifying, Public-Testing]
     steps:
     - uses: actions/checkout@v2
       with:
