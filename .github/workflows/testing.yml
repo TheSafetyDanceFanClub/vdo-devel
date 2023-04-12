@@ -14,13 +14,19 @@ jobs:
   Verifying:  
     runs-on: ubuntu-latest
     steps:
+      # Run assignment action 
+      - name: Assign reviewers and assignees
+        uses: TheSafetyDanceFanClub/vdo-auto-assign@main
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Remove all known labels
         uses: buildsville/add-remove-label@v2.0.0
         with:
           token: ${{secrets.GITHUB_TOKEN}}
           label: verification needed, untested, public testing running, public testing done, public testing failed, private testing running, private testing done, private testing failed
           type: remove
-          
+
       - name: Check for org membership
         id: is_organization_member
         uses: jamessingleton/is-organization-member@1.0.0
