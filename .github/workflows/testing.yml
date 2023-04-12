@@ -20,6 +20,7 @@ jobs:
           token: ${{secrets.GITHUB_TOKEN}}
           label: verification needed, untested, public testing running, public testing done, public testing failed, private testing running, private testing done, private testing failed
           type: remove
+          
       - name: Check for org membership
         id: is_organization_member
         uses: jamessingleton/is-organization-member@1.0.0
@@ -27,6 +28,7 @@ jobs:
           organization: TheSafetyDanceFanClub
           username: ${{ github.actor }}
           token: ${{ secrets.GITHUB_TOKEN }}              
+          
       - name: Add internal contrib label
         if: ${{ steps.is_organization_member.outputs.result == 'true' }}
         uses: buildsville/add-remove-label@v2.0.0
@@ -34,6 +36,7 @@ jobs:
           token: ${{secrets.RUNPRLABEL}}
           label: untested
           type: add     
+          
       - name: Add external contrib label
         if: ${{ steps.is_organization_member.outputs.result == 'false' }}
         uses: buildsville/add-remove-label@v2.0.0
@@ -41,12 +44,13 @@ jobs:
           token: ${{secrets.RUNPRLABEL}}
           label: verification needed
           type: add 
+          
       - name: Wait for approval
         if: ${{ steps.is_organization_member.outputs.result == 'false' }}      
         uses: trstringer/manual-approval@v1
         with:
-          secret: ${{ steps.generate_token.outputs.token }}
-          approvers: ${{ github.event.pr.requested_reviewers }}
+          secret: ${{ secrets.GITHUB_TOKEN }}
+          approvers: ${{ github.event.pull_request.requested_reviewers }}
           minimum-approvals: 1
           
   Public-Testing:
