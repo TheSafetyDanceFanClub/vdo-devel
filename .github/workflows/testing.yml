@@ -91,10 +91,10 @@ jobs:
         type: remove
         
     - name: Run-Untrusted-Tests
-      # run: make jenkins
-      run: |
-        sleep 30
-        exit 0
+      run: make jenkins
+      #run: |
+      #  sleep 30
+      #  exit 0
     
     - name: remove public testing running label
       if: always()
