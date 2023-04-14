@@ -91,10 +91,9 @@ jobs:
         type: remove
         
     - name: Run-Untrusted-Tests
-      run: make jenkins
-      #run: |
-      #  sleep 30
-      #  exit 0
+      run: |
+        sed -i 's/FEDORA36 FEDORA37 RHEL9/FEDORA36 FEDORA37/' src/perl/vdotest/vdotests.suites
+        make jenkins
     
     - name: remove public testing running label
       if: always()
