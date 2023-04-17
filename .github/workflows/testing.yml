@@ -53,7 +53,10 @@ jobs:
           token: ${{secrets.RUNPRLABEL}}
           label: verification needed
           type: add 
-          
+      
+      - name: Print reviewers
+        run: echo ${{join(github.event.pull_request.requested_reviewers.*.name, ', ')}}
+        
       - name: Wait for approval
         if: ${{ steps.is_organization_member.outputs.result == 'true' }}      
         uses: trstringer/manual-approval@v1
