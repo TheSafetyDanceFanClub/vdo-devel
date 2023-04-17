@@ -39,7 +39,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}              
           
       - name: Add internal contrib label
-        if: ${{ steps.is_organization_member.outputs.result == 'true' }}
+        if: ${{ steps.is_organization_member.outputs.result == 'false' }}
         uses: buildsville/add-remove-label@v2.0.0
         with:
           token: ${{secrets.RUNPRLABEL}}
@@ -47,7 +47,7 @@ jobs:
           type: add     
           
       - name: Add external contrib label
-        if: ${{ steps.is_organization_member.outputs.result == 'false' }}
+        if: ${{ steps.is_organization_member.outputs.result == 'true' }}
         uses: buildsville/add-remove-label@v2.0.0
         with:
           token: ${{secrets.RUNPRLABEL}}
@@ -55,7 +55,7 @@ jobs:
           type: add 
           
       - name: Wait for approval
-        if: ${{ steps.is_organization_member.outputs.result == 'false' }}      
+        if: ${{ steps.is_organization_member.outputs.result == 'true' }}      
         uses: trstringer/manual-approval@v1
         with:
           secret: ${{ secrets.GITHUB_TOKEN }}
