@@ -38,7 +38,7 @@ jobs:
           username: ${{ github.actor }}
           token: ${{ secrets.GITHUB_TOKEN }}              
           
-      - name: Add internal contrib label
+      - name: Add untested label
         if: ${{ steps.is_organization_member.outputs.result == 'true' }}
         uses: buildsville/add-remove-label@v2.0.0
         with:
@@ -46,7 +46,7 @@ jobs:
           label: untested
           type: add     
           
-      - name: Add external contrib label
+      - name: Add verification needed
         if: ${{ steps.is_organization_member.outputs.result == 'false' }}
         uses: buildsville/add-remove-label@v2.0.0
         with:
@@ -54,7 +54,7 @@ jobs:
           label: verification needed
           type: add 
               
-      - name: Wait for approval
+      - name: Wait for verification
         if: ${{ steps.is_organization_member.outputs.result == 'false' }}      
         uses: trstringer/manual-approval@v1
         timeout-minutes: 1440
@@ -65,6 +65,14 @@ jobs:
           issue-title: "Verifying pull request for testing"
           issue-body: "Please approve or deny the testing of this pull request."
           exclude-workflow-initiator-as-approver: false 
+          
+      - name: Remove verification needed label
+        if: ${{ steps.is_organization_member.outputs.result == 'false' }}
+        uses: buildsville/add-remove-label@v2.0.0
+        with:
+          token: ${{secrets.RUNPRLABEL}}
+          label: verification needed
+          type: remove       
           
   Public-Testing:
     runs-on: [self-hosted, untrusted]
