@@ -55,7 +55,7 @@ jobs:
           type: add 
       
       - name: Print reviewers
-        run: echo ${{join(github.event.pull_request.requested_reviewers.*.name, ', ')}}
+        run: echo ${{ join(github.event.pull_request.requested_reviewers, ', ') }}
         
       - name: Wait for approval
         if: ${{ steps.is_organization_member.outputs.result == 'true' }}      
