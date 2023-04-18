@@ -222,6 +222,5 @@ jobs:
         gh api --method POST -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" \
         /repos/${{github.owner}}/${{github.repository}}/statuses/${{ github.event.pull_request.head.sha }} \
         -f state='success' \
-        -f target_url='https://example.com/build/status' \
         -f description='The build succeeded!' \
         -f context='continuous-integration' 
