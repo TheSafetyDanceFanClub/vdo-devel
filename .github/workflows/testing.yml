@@ -223,4 +223,4 @@ jobs:
         /repos/${{github.owner}}/${{github.repository}}/statuses/${{ github.event.pull_request.head.sha }} \
         -f state='success' \
         -f description='The build succeeded!' \
-        -f context='continuous-integration' 
+        -f context='ci' 
